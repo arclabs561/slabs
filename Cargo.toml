@@ -1,0 +1,42 @@
+[package]
+name = "slabs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+description = "Text chunking for RAG: fixed, sentence, recursive, and semantic strategies"
+repository = "https://github.com/arclabs561/slabs"
+keywords = ["chunking", "rag", "nlp", "text", "segmentation"]
+categories = ["text-processing"]
+
+[dependencies]
+# Core
+thiserror = "2.0"
+unicode-segmentation = "1.11"
+
+# Semantic chunking (optional)
+fastembed = { version = "4", optional = true }
+
+# SIMD primitives for semantic similarity (optional)
+innr = { path = "../innr", optional = true }
+
+[features]
+default = []
+semantic = ["fastembed", "innr"]
+
+[dev-dependencies]
+proptest = "1.5"
+
+# [[bench]]
+# name = "chunking"
+# harness = false
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+cargo = "warn"
