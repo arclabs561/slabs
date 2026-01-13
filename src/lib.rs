@@ -127,6 +127,7 @@
 //! For most RAG applications, **Recursive** is the sweet spot.
 //! Use **Semantic** when retrieval quality justifies the cost.
 
+mod capacity;
 mod error;
 mod fixed;
 mod recursive;
@@ -136,6 +137,7 @@ mod slab;
 #[cfg(feature = "semantic")]
 mod semantic;
 
+pub use capacity::{ChunkCapacity, ChunkCapacityError};
 pub use error::{Error, Result};
 pub use fixed::FixedChunker;
 pub use recursive::RecursiveChunker;
