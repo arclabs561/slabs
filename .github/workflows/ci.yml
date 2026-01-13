@@ -21,14 +21,16 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
+      # Note: semantic feature requires innr (path dep, unavailable in standalone CI)
+      # Test core features only; full integration tested via tekne facade
       - name: Clippy
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --all-targets
 
       - name: Build
-        run: cargo build --all-features
+        run: cargo build
 
       - name: Test
-        run: cargo test --all-features
+        run: cargo test
 
   msrv:
     runs-on: ubuntu-latest
@@ -40,4 +42,4 @@ jobs:
       - name: Check MSRV
         run: |
           rm -f Cargo.lock  # v4 lock file requires Cargo 1.83+
-          cargo check --all-features
+          cargo check
