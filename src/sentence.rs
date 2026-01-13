@@ -211,6 +211,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_zero_sentences_panics() {
-        SentenceChunker::new(0);
+        let _ = SentenceChunker::new(0);
     }
 }

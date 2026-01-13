@@ -267,12 +267,12 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_zero_size_panics() {
-        RecursiveChunker::prose(0);
+        let _ = RecursiveChunker::prose(0);
     }
 
     #[test]
     #[should_panic]
     fn test_empty_separators_panics() {
-        RecursiveChunker::new(100, &[]);
+        let _ = RecursiveChunker::new(100, &[]);
     }
 }

@@ -44,6 +44,7 @@ fn sentence_like_text() -> impl Strategy<Value = String> {
 // =============================================================================
 
 /// Check that chunks cover the entire input text
+#[allow(dead_code)] // Reserved for future invariant tests
 fn chunks_cover_input(slabs: &[Slab], text: &str) -> bool {
     if slabs.is_empty() {
         return text.is_empty();

@@ -185,12 +185,12 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_zero_size_panics() {
-        FixedChunker::new(0, 0);
+        let _ = FixedChunker::new(0, 0);
     }
 
     #[test]
     #[should_panic]
     fn test_overlap_exceeds_size_panics() {
-        FixedChunker::new(10, 10);
+        let _ = FixedChunker::new(10, 10);
     }
 }
