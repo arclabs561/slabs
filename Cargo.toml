@@ -31,6 +31,10 @@ proptest = "1.5"
 # name = "chunking"
 # harness = false
 
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
