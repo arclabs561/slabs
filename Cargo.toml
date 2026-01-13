@@ -17,8 +17,8 @@ unicode-segmentation = "1.11"
 # Semantic chunking (optional)
 fastembed = { version = "4", optional = true }
 
-# SIMD primitives for semantic similarity (optional)
-innr = { path = "../innr", optional = true }
+# SIMD primitives for semantic similarity (ecosystem crate)
+innr = { git = "https://github.com/arclabs561/innr.git", optional = true }
 
 [features]
 default = []
