@@ -2,7 +2,7 @@
 name = "slabs"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.81"
 license = "MIT OR Apache-2.0"
 description = "Text chunking for RAG: fixed, sentence, recursive, and semantic strategies"
 repository = "https://github.com/arclabs561/slabs"
