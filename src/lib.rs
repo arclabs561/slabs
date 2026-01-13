@@ -113,6 +113,28 @@
 //! let slabs = chunker.chunk(long_document);
 //! ```
 //!
+//! ## Late Chunking
+//!
+//! Late chunking embeds the full document first, then pools token embeddings
+//! for each chunk. This preserves document-wide context that traditional
+//! chunking loses (e.g., pronouns referring to earlier entities).
+//!
+//! ```rust,ignore
+//! use slabs::{LateChunker, SentenceChunker, Chunker};
+//!
+//! // Wrap any chunker with late chunking
+//! let late = LateChunker::new(SentenceChunker::new(3), 384);
+//!
+//! // Get chunk boundaries
+//! let chunks = late.chunk(&document);
+//!
+//! // Get token embeddings from your embedding model (full document)
+//! let token_embeddings = embed_document_tokens(&document);
+//!
+//! // Pool into contextualized chunk embeddings
+//! let chunk_embeddings = late.pool(&token_embeddings, &chunks, document.len());
+//! ```
+//!
 //! ## Performance Considerations
 //!
 //! | Strategy | Speed | Quality | Memory |
@@ -130,6 +152,7 @@
 mod capacity;
 mod error;
 mod fixed;
+mod late;
 mod recursive;
 mod sentence;
 mod slab;
@@ -140,6 +163,7 @@ mod semantic;
 pub use capacity::{ChunkCapacity, ChunkCapacityError};
 pub use error::{Error, Result};
 pub use fixed::FixedChunker;
+pub use late::{LateChunker, LateChunkingPooler};
 pub use recursive::RecursiveChunker;
 pub use sentence::SentenceChunker;
 pub use slab::Slab;
