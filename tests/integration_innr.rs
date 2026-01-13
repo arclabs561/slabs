@@ -37,7 +37,7 @@ fn semantic_chunker_creates_valid_chunks() {
 }
 
 #[test]
-#[ignore] // Requires fastembed model download  
+#[ignore] // Requires fastembed model download
 fn semantic_chunker_detects_topic_shifts() {
     // Two clearly different topics
     let text = r#"
@@ -84,9 +84,6 @@ fn innr_cosine_groups_similar_content() {
     // Verify chunks are coherent (this is a weak test, but validates integration)
     for slab in &slabs {
         let words: Vec<&str> = slab.text.split_whitespace().collect();
-        assert!(
-            words.len() >= 2,
-            "Chunks should contain meaningful content"
-        );
+        assert!(words.len() >= 2, "Chunks should contain meaningful content");
     }
 }

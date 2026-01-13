@@ -105,7 +105,12 @@ impl LateChunkingPooler {
     /// # Panics
     ///
     /// Panics if token embeddings have inconsistent dimensions.
-    pub fn pool(&self, token_embeddings: &[Vec<f32>], chunks: &[Slab], doc_len: usize) -> Vec<Vec<f32>> {
+    pub fn pool(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        chunks: &[Slab],
+        doc_len: usize,
+    ) -> Vec<Vec<f32>> {
         if token_embeddings.is_empty() || chunks.is_empty() || doc_len == 0 {
             return vec![vec![0.0; self.dim]; chunks.len()];
         }
@@ -285,7 +290,12 @@ impl<C: Chunker> LateChunker<C> {
     /// Pool token embeddings into chunk embeddings.
     ///
     /// Call this after getting token embeddings from your embedding model.
-    pub fn pool(&self, token_embeddings: &[Vec<f32>], chunks: &[Slab], doc_len: usize) -> Vec<Vec<f32>> {
+    pub fn pool(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        chunks: &[Slab],
+        doc_len: usize,
+    ) -> Vec<Vec<f32>> {
         self.pooler.pool(token_embeddings, chunks, doc_len)
     }
 }
@@ -341,7 +351,11 @@ mod tests {
         assert_eq!(chunk_embeddings[1].len(), 4);
 
         // Embeddings should be normalized
-        let norm0: f32 = chunk_embeddings[0].iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm0: f32 = chunk_embeddings[0]
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt();
         assert!((norm0 - 1.0).abs() < 0.01);
     }
 

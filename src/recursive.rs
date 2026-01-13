@@ -221,7 +221,8 @@ mod tests {
     #[test]
     fn test_paragraph_split() {
         let chunker = RecursiveChunker::prose(50);
-        let text = "Short.\n\nThis is a longer paragraph that might need splitting into smaller pieces.";
+        let text =
+            "Short.\n\nThis is a longer paragraph that might need splitting into smaller pieces.";
         let slabs = chunker.chunk(text);
 
         assert!(slabs.len() >= 2);
@@ -235,11 +236,7 @@ mod tests {
         let slabs = chunker.chunk(text);
 
         for slab in &slabs {
-            assert!(
-                slab.len() <= 20,
-                "Chunk too large: {} bytes",
-                slab.len()
-            );
+            assert!(slab.len() <= 20, "Chunk too large: {} bytes", slab.len());
         }
     }
 

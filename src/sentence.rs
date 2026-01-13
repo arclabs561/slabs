@@ -76,7 +76,9 @@ impl SentenceChunker {
     #[must_use]
     pub fn new(sentences_per_chunk: usize) -> Self {
         assert!(sentences_per_chunk > 0, "sentences_per_chunk must be > 0");
-        Self { sentences_per_chunk }
+        Self {
+            sentences_per_chunk,
+        }
     }
 
     /// Create a chunker that outputs one sentence per chunk.
