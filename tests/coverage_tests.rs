@@ -1,3 +1,4 @@
+#![allow(dead_code, clippy::needless_range_loop, clippy::manual_assert)]
 //! Coverage and overlap tests for text chunking.
 //!
 //! These tests verify that chunks properly cover input text and

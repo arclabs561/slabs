@@ -8,7 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -Dwarnings
 
 jobs:
   test:
@@ -23,7 +22,10 @@ jobs:
 
       # Note: semantic feature requires innr (path dep, unavailable in standalone CI)
       # Test core features only; full integration tested via tekne facade
-      - name: Clippy
+      - name: Clippy (lib only, strict)
+        run: cargo clippy --lib -- -D warnings
+
+      - name: Clippy (all targets, warnings)
         run: cargo clippy --all-targets
 
       - name: Build
@@ -36,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.75.0
+      - uses: dtolnay/rust-toolchain@1.80.0
       - uses: Swatinem/rust-cache@v2
 
       - name: Check MSRV

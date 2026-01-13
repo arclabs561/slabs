@@ -175,7 +175,7 @@ impl LateChunkingPooler {
 
                 let selected: Vec<&[f32]> = token_indices
                     .iter()
-                    .filter_map(|&i| token_embeddings.get(i).map(|v| v.as_slice()))
+                    .filter_map(|&i| token_embeddings.get(i).map(Vec::as_slice))
                     .collect();
 
                 self.mean_pool_refs(&selected)

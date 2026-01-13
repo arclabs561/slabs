@@ -129,9 +129,9 @@ impl RecursiveChunker {
 
         for (i, part) in parts.iter().enumerate() {
             let with_sep = if i < parts.len() - 1 {
-                format!("{}{}", part, sep)
+                format!("{part}{sep}")
             } else {
-                part.to_string()
+                (*part).to_string()
             };
 
             if current.is_empty() {

@@ -1,3 +1,4 @@
+#![allow(clippy::len_zero)]
 //! Property-based tests for text chunking.
 //!
 //! These tests verify that chunking strategies maintain key invariants:

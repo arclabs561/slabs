@@ -134,7 +134,7 @@ impl Chunker for FixedChunker {
             return 0;
         }
         let step = self.step();
-        (text_len + step - 1) / step
+        text_len.div_ceil(step)
     }
 }
 

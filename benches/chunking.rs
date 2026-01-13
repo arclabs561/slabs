@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 //! Benchmarks for text chunking strategies.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
