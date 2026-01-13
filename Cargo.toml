@@ -34,6 +34,14 @@ proptest = "1.5"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+debug = 1
+
+[profile.release-optimized]
+inherits = "release"
+lto = "fat"
+panic = "abort"
+strip = true
+debug = false
 
 [lints.rust]
 unsafe_code = "forbid"
