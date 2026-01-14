@@ -1251,7 +1251,7 @@ dependencies = [
 [[package]]
 name = "innr"
 version = "0.1.0"
-source = "git+https://github.com/arclabs561/innr.git#2711897cf0c35395f489f9a03ee332b7c5ee7c7f"
+source = "git+https://github.com/arclabs561/innr.git#fd9d857271c0f39a928bcb0ce71904b10887feab"
 
 [[package]]
 name = "interpolate_name"
