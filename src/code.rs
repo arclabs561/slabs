@@ -161,13 +161,12 @@ impl CodeChunker {
 impl Chunker for CodeChunker {
     fn chunk(&self, text: &str) -> Vec<Slab> {
         let mut parser = Parser::new();
-        if let Err(_) = parser.set_language(&self.language.get_language()) {
+        if parser.set_language(&self.language.get_language()).is_err() {
             return vec![];
         }
 
-        let tree = match parser.parse(text, None) {
-            Some(t) => t,
-            None => return vec![],
+        let Some(tree) = parser.parse(text, None) else {
+            return vec![];
         };
 
         let root = tree.root_node();
@@ -179,10 +178,10 @@ impl Chunker for CodeChunker {
         // 2. Merge atomic chunks into maximal slabs
         let mut slabs = Vec::new();
         let mut current_text = String::new();
-        let mut current_start = if !atomic_chunks.is_empty() {
-            atomic_chunks[0].start
-        } else {
+        let mut current_start = if atomic_chunks.is_empty() {
             0
+        } else {
+            atomic_chunks[0].start
         };
         let mut current_end = current_start;
 
