@@ -188,7 +188,7 @@ impl Chunker for CodeChunker {
         // Ensure atomic chunks are sorted
         atomic_chunks.sort_by_key(|c| c.start);
 
-        for chunk in atomic_chunks {
+        for (i, chunk) in atomic_chunks.iter().enumerate() {
             // Calculate potential gap between current end and next chunk start
             // (collect_leafs should cover gaps, but just in case)
             let gap = if chunk.start > current_end {
@@ -208,10 +208,60 @@ impl Chunker for CodeChunker {
                     slabs.len(),
                 ));
                 current_text.clear();
-                current_start = chunk.start;
-                // If the gap was significant, we might have skipped it.
-                // But generally gaps stick to the preceding or following chunk.
-                // In this simple merge, we restart at chunk.start.
+
+                // Overlap Logic
+                if self.chunk_overlap > 0 {
+                    let mut overlap_size = 0;
+                    let mut overlap_chunks = Vec::new();
+
+                    // Walk backwards to find chunks that fit in overlap
+                    for j in (0..i).rev() {
+                        let prev_chunk = &atomic_chunks[j];
+
+                        // Calculate gap after this prev_chunk
+                        // If it's the last one before current (j = i-1), gap is `gap` (current_end..chunk.start)
+                        // Wait, `gap` is between `current_end` and `chunk.start`.
+                        // `current_end` aligns with `prev_chunk.end`.
+
+                        let next_start = if j == i - 1 {
+                            chunk.start
+                        } else {
+                            atomic_chunks[j + 1].start
+                        };
+
+                        let gap_len = next_start - prev_chunk.end;
+                        let chunk_len = prev_chunk.len();
+
+                        if overlap_size + chunk_len + gap_len > self.chunk_overlap {
+                            if overlap_chunks.is_empty() {
+                                overlap_chunks.push(j);
+                            }
+                            break;
+                        }
+
+                        overlap_chunks.push(j);
+                        overlap_size += chunk_len + gap_len;
+                    }
+
+                    if !overlap_chunks.is_empty() {
+                        overlap_chunks.reverse(); // Forward order
+                        let first_idx = overlap_chunks[0];
+                        let last_idx = *overlap_chunks.last().unwrap();
+
+                        let first_chunk = &atomic_chunks[first_idx];
+                        let last_chunk = &atomic_chunks[last_idx];
+
+                        current_start = first_chunk.start;
+                        // Include text up to end of last overlap chunk
+                        // (Gaps between overlap chunks are included by slicing source text)
+                        current_text = text[current_start..last_chunk.end].to_string();
+                        current_end = last_chunk.end;
+                    } else {
+                        current_start = chunk.start;
+                    }
+                } else {
+                    current_start = chunk.start;
+                }
             }
 
             if current_text.is_empty() {
