@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
 
 jobs:
   test:
@@ -22,16 +23,32 @@ jobs:
 
       # Note: semantic feature requires innr (path dep, unavailable in standalone CI)
       # Test core features only; full integration tested via tekne facade
-      - name: Clippy (lib only, strict)
-        run: cargo clippy --lib -- -D warnings
-
-      - name: Clippy (all targets, warnings)
-        run: cargo clippy --all-targets
+      - name: Clippy (strict)
+        run: cargo clippy --lib --all-features -- -D clippy::correctness
 
       - name: Build
         run: cargo build
 
       - name: Test
+        run: cargo test
+
+      - name: Property tests
+        run: cargo test --test property_tests
+        env:
+          PROPTEST_CASES: 1000
+
+  # ARM native testing
+  test-arm:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build (ARM)
+        run: cargo build
+
+      - name: Test (ARM)
         run: cargo test
 
   msrv:
@@ -45,3 +62,15 @@ jobs:
         run: |
           rm -f Cargo.lock  # v4 lock file requires Cargo 1.83+
           cargo check
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build docs
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -Dwarnings

@@ -170,7 +170,11 @@ impl RecursiveChunker {
         while start < text.len() {
             let end = (start + self.max_size).min(text.len());
             // Ensure we're at a char boundary
-            let end = text.floor_char_boundary(end);
+            // Replaces text.floor_char_boundary(end) for MSRV < 1.80 compatibility
+            let mut end = end;
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
 
             if end > start {
                 result.push(text[start..end].to_string());

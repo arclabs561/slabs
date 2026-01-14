@@ -109,7 +109,11 @@ impl Chunker for FixedChunker {
             let end = (start + self.size).min(text.len());
 
             // Ensure we're at a char boundary
-            let end = text.floor_char_boundary(end);
+            // Replaces text.floor_char_boundary(end) for MSRV < 1.80 compatibility
+            let mut end = end;
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
 
             if end > start {
                 slabs.push(Slab::new(&text[start..end], start, end, index));
@@ -123,7 +127,11 @@ impl Chunker for FixedChunker {
             }
 
             // Ensure next start is at a char boundary
-            start = text.ceil_char_boundary(next_start);
+            // Replaces text.ceil_char_boundary(next_start) for MSRV < 1.80 compatibility
+            start = next_start;
+            while start < text.len() && !text.is_char_boundary(start) {
+                start += 1;
+            }
         }
 
         slabs
