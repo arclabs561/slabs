@@ -163,6 +163,8 @@ mod semantic;
 #[cfg(feature = "code")]
 mod code;
 
+mod model; // New model-based chunking
+
 pub use capacity::{ChunkCapacity, ChunkCapacityError};
 pub use error::{Error, Result};
 pub use fixed::FixedChunker;
@@ -176,6 +178,8 @@ pub use semantic::SemanticChunker;
 
 #[cfg(feature = "code")]
 pub use code::{CodeChunker, CodeLanguage};
+
+pub use model::ModelChunker;
 
 /// A text chunking strategy.
 ///

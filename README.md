@@ -2,14 +2,16 @@
 
 Text chunking for RAG pipelines.
 
+Dual-licensed under MIT or Apache-2.0.
+
 ## Strategies
 
-| Strategy | Use Case | Speed |
-|----------|----------|-------|
-| Fixed | Homogeneous content, baselines | O(n) |
-| Sentence | Prose, articles | O(n) |
-| Recursive | General-purpose | O(n log n) |
-| Semantic | Topic coherence (requires `semantic` feature) | O(n d) |
+| Strategy | Use Case | Complexity |
+|----------|----------|------------|
+| Fixed | Homogeneous content, baselines | $O(n)$ |
+| Sentence | Prose, articles | $O(n)$ |
+| Recursive | General-purpose | $O(n \log n)$ |
+| Semantic | Topic coherence (`semantic` feature) | $O(nd)$ |
 
 ## Example
 
@@ -24,7 +26,3 @@ for slab in slabs {
     println!("[{}..{}]: {}", slab.start, slab.end, slab.text);
 }
 ```
-
-## License
-
-MIT OR Apache-2.0

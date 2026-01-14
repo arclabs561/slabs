@@ -146,14 +146,26 @@ impl CodeChunker {
                 }
             }
         } else {
-            // Leaf node too big. Hard split?
-            // For now, emit as one big chunk.
-            chunks.push(Slab::new(
-                &code[start_byte..end_byte],
-                start_byte,
-                end_byte,
-                0,
-            ));
+            // Leaf node too big. Fall back to recursive text chunking.
+            // This handles long string literals or comments.
+            let leaf_text = &code[start_byte..end_byte];
+            let recursive = crate::RecursiveChunker::new(
+                self.max_chunk_size,
+                &["\n\n", "\n", " ", ""], // Standard separators
+            )
+            .with_overlap(0); // No internal overlap for atomic parts (handled by merger)
+
+            let sub_chunks = recursive.chunk(leaf_text);
+
+            for sub in sub_chunks {
+                // Adjust offsets relative to original code
+                chunks.push(Slab::new(
+                    sub.text,
+                    start_byte + sub.start,
+                    start_byte + sub.end,
+                    0,
+                ));
+            }
         }
     }
 }

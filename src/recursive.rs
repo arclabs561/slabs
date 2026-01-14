@@ -68,6 +68,7 @@ use crate::{Chunker, Slab};
 #[derive(Debug, Clone)]
 pub struct RecursiveChunker {
     max_size: usize,
+    overlap: usize,
     separators: Vec<String>,
 }
 
@@ -89,8 +90,16 @@ impl RecursiveChunker {
 
         Self {
             max_size,
+            overlap: 0,
             separators: separators.iter().map(|&s| s.to_string()).collect(),
         }
+    }
+
+    /// Set overlap size.
+    #[must_use]
+    pub fn with_overlap(mut self, overlap: usize) -> Self {
+        self.overlap = overlap;
+        self
     }
 
     /// Create a chunker with default separators for prose.
@@ -195,26 +204,42 @@ impl Chunker for RecursiveChunker {
 
         let chunks = self.split_recursive(text, 0);
 
-        // Convert to Slabs with proper offsets
+        // Convert to Slabs with offsets by walking the concatenation.
+        // Invariant: `split_recursive` returns chunks that re-concatenate to `text`.
         let mut slabs = Vec::with_capacity(chunks.len());
-        let mut offset = 0;
+        let mut cursor = 0usize;
 
         for (index, chunk) in chunks.into_iter().enumerate() {
-            // Find this chunk in the original text
-            // This is O(n) per chunk, but chunks are typically few
-            if let Some(pos) = text[offset..].find(&chunk) {
-                let start = offset + pos;
-                let end = start + chunk.len();
-                slabs.push(Slab::new(chunk, start, end, index));
-                offset = start; // Don't skip past, in case of overlap
+            let start = cursor;
+            let end = start + chunk.len();
+            cursor = end;
+
+            // Apply overlap by expanding the start backwards, but keep the final
+            // chunk size bounded by `max_size`. (Overlap is "up to" `self.overlap`.)
+            let mut start_with_overlap = start.saturating_sub(self.overlap);
+            if end.saturating_sub(start_with_overlap) > self.max_size {
+                start_with_overlap = end.saturating_sub(self.max_size);
             }
+
+            // Ensure UTF-8 char boundary for slicing.
+            while start_with_overlap > 0 && !text.is_char_boundary(start_with_overlap) {
+                start_with_overlap -= 1;
+            }
+
+            slabs.push(Slab::new(
+                text[start_with_overlap..end].to_string(),
+                start_with_overlap,
+                end,
+                index,
+            ));
         }
 
         slabs
     }
 
     fn estimate_chunks(&self, text_len: usize) -> usize {
-        (text_len / self.max_size).max(1)
+        let step = self.max_size.saturating_sub(self.overlap).max(1);
+        (text_len / step).max(1)
     }
 }
 
