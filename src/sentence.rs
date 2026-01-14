@@ -18,7 +18,7 @@
 //! - Abbreviations (Dr., Mr., Inc., etc.)
 //! - Decimal numbers (3.14159)
 //! - Ellipses (...)
-//! - URLs (https://example.com/path)
+//! - URLs (<https://example.com/path>)
 //!
 //! ## Why Group Sentences?
 //!
