@@ -1,10 +1,10 @@
 [package]
 name = "slabs"
 version = "0.1.0"
+authors = ["Arc <attobop@gmail.com>"]
 edition = "2021"
-rust-version = "1.81"
-license = "MIT OR Apache-2.0"
 description = "Text chunking for RAG: fixed, sentence, recursive, and semantic strategies"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/arclabs561/slabs"
 keywords = ["chunking", "rag", "nlp", "text", "segmentation"]
 categories = ["text-processing"]
@@ -18,7 +18,7 @@ unicode-segmentation = "1.11"
 fastembed = { version = "4", optional = true }
 
 # SIMD primitives for semantic similarity (ecosystem crate)
-innr = { git = "https://github.com/arclabs561/innr.git", optional = true }
+innr = { version = "0.1.0", optional = true }
 
 # Code chunking (optional)
 tree-sitter = { version = "0.24", optional = true }
@@ -45,36 +45,3 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[bench]]
 name = "chunking"
 harness = false
-
-[profile.release]
-lto = "thin"
-codegen-units = 1
-debug = 1
-
-[profile.release-optimized]
-inherits = "release"
-lto = "fat"
-panic = "abort"
-strip = true
-debug = false
-
-[lints.rust]
-unsafe_code = "forbid"
-missing_docs = "warn"
-
-[lints.clippy]
-all = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-nursery = { level = "allow", priority = -1 } # nursery is unstable
-cargo = { level = "warn", priority = -1 }
-
-# Exceptions
-cast_possible_truncation = "allow"
-cast_precision_loss = "allow"
-cast_sign_loss = "allow"
-must_use_candidate = "allow"
-missing_panics_doc = "allow"
-doc_markdown = "allow"
-module_name_repetitions = "allow"
-map_unwrap_or = "allow"
-incompatible_msrv = "allow"
