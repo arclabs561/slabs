@@ -13,6 +13,7 @@ categories = ["text-processing"]
 # Core
 thiserror = "2.0"
 unicode-segmentation = "1.11"
+clap = { version = "4.5", features = ["derive"], optional = true }
 
 # Semantic chunking (optional)
 fastembed = { version = "5.8.1", optional = true }
@@ -31,6 +32,7 @@ tree-sitter-go = { version = "0.23", optional = true }
 
 [features]
 default = []
+cli = ["dep:clap"]
 semantic = ["dep:fastembed", "dep:innr", "dep:symproj", "dep:textprep"]
 code = [
     "dep:tree-sitter",
