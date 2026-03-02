@@ -57,10 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         for (i, chunk) in chunks.iter().enumerate() {
-            println!(
-                "\n--- Chunk {} [{}..{}] ---",
-                i, chunk.start, chunk.end
-            );
+            println!("\n--- Chunk {} [{}..{}] ---", i, chunk.start, chunk.end);
             println!("{}", chunk.text);
         }
     }

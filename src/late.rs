@@ -330,18 +330,8 @@ mod tests {
         ];
 
         let chunks = vec![
-            Slab {
-                text: "first chunk".to_string(),
-                start: 0,
-                end: 10,
-                index: 0,
-            },
-            Slab {
-                text: "second chunk".to_string(),
-                start: 10,
-                end: 20,
-                index: 1,
-            },
+            Slab::new("first chunk", 0, 10, 0),
+            Slab::new("second chunk", 10, 20, 1),
         ];
 
         let chunk_embeddings = pooler.pool(&token_embeddings, &chunks, 20);
@@ -399,18 +389,8 @@ mod tests {
         ];
 
         let chunks = vec![
-            Slab {
-                text: "Hello world.".to_string(),
-                start: 0,
-                end: 12,
-                index: 0,
-            },
-            Slab {
-                text: " Bye".to_string(),
-                start: 12,
-                end: 16,
-                index: 1,
-            },
+            Slab::new("Hello world.", 0, 12, 0),
+            Slab::new(" Bye", 12, 16, 1),
         ];
 
         let embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &chunks);
@@ -427,12 +407,7 @@ mod tests {
         let result = pooler.pool(&[], &[], 0);
         assert!(result.is_empty());
 
-        let chunks = vec![Slab {
-            text: "test".to_string(),
-            start: 0,
-            end: 4,
-            index: 0,
-        }];
+        let chunks = vec![Slab::new("test", 0, 4, 0)];
 
         let result = pooler.pool(&[], &chunks, 4);
         assert_eq!(result.len(), 1);

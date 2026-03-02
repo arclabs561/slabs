@@ -171,7 +171,7 @@ pub use fixed::FixedChunker;
 pub use late::{LateChunker, LateChunkingPooler};
 pub use recursive::RecursiveChunker;
 pub use sentence::SentenceChunker;
-pub use slab::Slab;
+pub use slab::{compute_char_offsets, Slab};
 
 #[cfg(feature = "semantic")]
 pub use semantic::SemanticChunker;
