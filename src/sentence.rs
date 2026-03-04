@@ -177,10 +177,7 @@ impl Chunker for SentenceChunker {
                 break;
             }
 
-            let start_byte = chunk_sentences
-                .first()
-                .map(|(off, _)| *off)
-                .unwrap_or(0);
+            let start_byte = chunk_sentences.first().map(|(off, _)| *off).unwrap_or(0);
             let end_byte = chunk_sentences
                 .last()
                 .map(|(off, s)| off + s.len())
