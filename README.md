@@ -1,5 +1,9 @@
 # slabs
 
+[![crates.io](https://img.shields.io/crates/v/slabs.svg)](https://crates.io/crates/slabs)
+[![Documentation](https://docs.rs/slabs/badge.svg)](https://docs.rs/slabs)
+[![CI](https://github.com/arclabs561/slabs/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/slabs/actions/workflows/ci.yml)
+
 Text chunking for RAG pipelines.
 
 Dual-licensed under MIT or Apache-2.0.
