@@ -161,7 +161,7 @@ impl CodeChunker {
 }
 
 impl Chunker for CodeChunker {
-    fn chunk(&self, text: &str) -> Vec<Slab> {
+    fn chunk_bytes(&self, text: &str) -> Vec<Slab> {
         let mut parser = Parser::new();
         if parser.set_language(&self.language.get_language()).is_err() {
             return vec![];

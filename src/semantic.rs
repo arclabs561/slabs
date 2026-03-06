@@ -159,7 +159,7 @@ impl SemanticChunker {
 }
 
 impl Chunker for SemanticChunker {
-    fn chunk(&self, text: &str) -> Vec<Slab> {
+    fn chunk_bytes(&self, text: &str) -> Vec<Slab> {
         if text.is_empty() {
             return vec![];
         }

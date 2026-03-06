@@ -301,8 +301,8 @@ impl<C: Chunker> LateChunker<C> {
 }
 
 impl<C: Chunker> Chunker for LateChunker<C> {
-    fn chunk(&self, text: &str) -> Vec<Slab> {
-        self.base.chunk(text)
+    fn chunk_bytes(&self, text: &str) -> Vec<Slab> {
+        self.base.chunk_bytes(text)
     }
 
     fn estimate_chunks(&self, text_len: usize) -> usize {

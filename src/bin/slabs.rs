@@ -1,5 +1,5 @@
 #[cfg(feature = "cli")]
-use slabs::{compute_char_offsets, Chunker, FixedChunker, RecursiveChunker, SentenceChunker};
+use slabs::{Chunker, FixedChunker, RecursiveChunker, SentenceChunker};
 #[cfg(feature = "cli")]
 use std::path::PathBuf;
 
@@ -69,8 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        let mut chunks = chunker.chunk(&text);
-        compute_char_offsets(&text, &mut chunks);
+        let chunks = chunker.chunk(&text);
 
         match args.format {
             Format::Text => {

@@ -21,10 +21,11 @@
 /// assert_eq!(&text[slab.start..slab.end], "world");
 /// ```
 ///
-/// Character offsets (`char_start`/`char_end`) are available after calling
-/// [`Slab::with_char_offsets`] or [`compute_char_offsets`]. These count
-/// Unicode scalar values (`char`s), useful for NLP systems that index
-/// by character position.
+/// Character offsets (`char_start`/`char_end`) are automatically populated
+/// when using [`Chunker::chunk`](crate::Chunker::chunk). They count Unicode
+/// scalar values (`char`s), useful for NLP systems that index by character
+/// position. Only `None` when using [`Chunker::chunk_bytes`](crate::Chunker::chunk_bytes)
+/// directly.
 ///
 /// ## Overlap Handling
 ///

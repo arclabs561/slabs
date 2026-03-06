@@ -197,7 +197,7 @@ impl RecursiveChunker {
 }
 
 impl Chunker for RecursiveChunker {
-    fn chunk(&self, text: &str) -> Vec<Slab> {
+    fn chunk_bytes(&self, text: &str) -> Vec<Slab> {
         if text.is_empty() {
             return vec![];
         }

@@ -94,7 +94,7 @@ impl FixedChunker {
 }
 
 impl Chunker for FixedChunker {
-    fn chunk(&self, text: &str) -> Vec<Slab> {
+    fn chunk_bytes(&self, text: &str) -> Vec<Slab> {
         if text.is_empty() {
             return vec![];
         }

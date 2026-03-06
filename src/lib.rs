@@ -194,13 +194,27 @@ pub use code::{CodeChunker, CodeLanguage};
 /// let text = "Hello world. This is a test.";
 /// let slabs1 = chunk_document(&fixed, text);
 /// let slabs2 = chunk_document(&sentence, text);
+///
+/// // Character offsets are always populated
+/// assert!(slabs1[0].char_start.is_some());
 /// ```
 pub trait Chunker: Send + Sync {
-    /// Split text into chunks.
+    /// Core chunking implementation returning slabs with byte offsets only.
     ///
-    /// Each chunk is a [`Slab`] containing the text and its byte offsets
-    /// in the original document.
-    fn chunk(&self, text: &str) -> Vec<Slab>;
+    /// Implementors override this method. Users should call [`chunk`](Chunker::chunk)
+    /// instead, which adds character offsets automatically.
+    fn chunk_bytes(&self, text: &str) -> Vec<Slab>;
+
+    /// Split text into chunks with both byte and character offsets.
+    ///
+    /// This calls [`chunk_bytes`](Chunker::chunk_bytes) and then computes
+    /// Unicode character offsets on every slab. Users get correct `char_start`
+    /// and `char_end` without manual work.
+    fn chunk(&self, text: &str) -> Vec<Slab> {
+        let mut slabs = self.chunk_bytes(text);
+        compute_char_offsets(text, &mut slabs);
+        slabs
+    }
 
     /// Estimate the number of chunks for a given text length.
     ///
