@@ -1,7 +1,7 @@
 #[cfg(feature = "code")]
 mod code_props {
     use proptest::prelude::*;
-    use slabs::{Chunker, CodeChunker, CodeLanguage, Slab};
+    use slabs::{Chunker, CodeChunker, CodeLanguage};
 
     proptest! {
         #[test]
@@ -53,7 +53,6 @@ mod code_props {
             // Our implementation includes gaps.
 
             // Reconstruct text from slabs
-            let mut reconstructed = String::new();
             let mut last_end = 0;
 
             for slab in &slabs {
