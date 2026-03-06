@@ -33,7 +33,7 @@ tree-sitter-go = { version = "0.23", optional = true }
 [features]
 default = []
 cli = ["dep:clap"]
-semantic = ["dep:fastembed", "dep:innr", "dep:symproj", "dep:textprep"]
+semantic = ["dep:fastembed", "dep:innr", "dep:textprep"]
 code = [
     "dep:tree-sitter",
     "dep:tree-sitter-rust",

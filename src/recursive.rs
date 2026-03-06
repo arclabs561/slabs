@@ -290,7 +290,7 @@ mod tests {
         let slabs = chunker.chunk(text);
 
         // Should respect section boundaries
-        assert!(slabs.len() >= 1);
+        assert!(!slabs.is_empty());
     }
 
     #[test]

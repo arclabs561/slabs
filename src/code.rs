@@ -267,7 +267,6 @@ impl Chunker for CodeChunker {
                         // Include text up to end of last overlap chunk
                         // (Gaps between overlap chunks are included by slicing source text)
                         current_text = text[current_start..last_chunk.end].to_string();
-                        current_end = last_chunk.end;
                     } else {
                         current_start = chunk.start;
                     }

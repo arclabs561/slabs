@@ -262,7 +262,7 @@ fn chunk_bounds_valid(slabs: &[Slab], text: &str) -> bool {
             return false;
         }
         // Also verify text matches
-        if slab.text != &text[slab.start..slab.end] {
+        if slab.text != text[slab.start..slab.end] {
             return false;
         }
     }

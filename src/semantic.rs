@@ -74,7 +74,7 @@ use crate::{Chunker, Error, Result, Slab};
 /// assert_eq!(slabs.len(), 2);
 /// ```
 pub struct SemanticChunker {
-    model: fastembed::TextEmbedding,
+    model: std::sync::Mutex<fastembed::TextEmbedding>,
     threshold: f32,
     min_chunk_sentences: usize,
 }
@@ -96,7 +96,7 @@ impl SemanticChunker {
             .map_err(|e| Error::Embedding(e.to_string()))?;
 
         Ok(Self {
-            model,
+            model: std::sync::Mutex::new(model),
             threshold,
             min_chunk_sentences: 2,
         })
@@ -113,22 +113,7 @@ impl SemanticChunker {
 
     /// Compute cosine similarity between two embeddings.
     fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-        #[cfg(feature = "innr")]
-        {
-            innr::cosine(a, b)
-        }
-
-        #[cfg(not(feature = "innr"))]
-        {
-            let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-            let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-            let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-            if norm_a > 0.0 && norm_b > 0.0 {
-                dot / (norm_a * norm_b)
-            } else {
-                0.0
-            }
-        }
+        innr::cosine(a, b)
     }
 
     /// Extract sentences from text.
@@ -187,7 +172,7 @@ impl Chunker for SemanticChunker {
 
         // Embed sentences
         let texts: Vec<&str> = sentences.iter().map(|(_, s)| s.as_str()).collect();
-        let Ok(embeddings) = self.model.embed(texts, None) else {
+        let Ok(embeddings) = self.model.lock().unwrap().embed(texts, None) else {
             // Fallback: return as single chunk
             return vec![Slab::new(text.trim(), 0, text.len(), 0)];
         };
