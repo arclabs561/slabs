@@ -1,5 +1,4 @@
 use crate::{Chunker, Slab};
-use thiserror::Error;
 use tree_sitter::{Language, Node, Parser};
 
 /// Supported programming languages for code chunking.
@@ -64,15 +63,6 @@ impl CodeLanguage {
             ),
         }
     }
-}
-
-/// Errors that can occur during code chunking.
-#[derive(Debug, Error)]
-pub enum CodeChunkerError {
-    #[error("Tree-sitter language error: {0}")]
-    LanguageError(#[from] tree_sitter::LanguageError),
-    #[error("Failed to parse code")]
-    ParseError,
 }
 
 /// A chunker that respects code structure using tree-sitter.
