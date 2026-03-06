@@ -8,7 +8,7 @@
 //! - Bounds: chunk offsets are valid
 
 use proptest::prelude::*;
-use slabs::{Chunker, FixedChunker, RecursiveChunker, SentenceChunker, Slab};
+use slabs::{compute_char_offsets, Chunker, FixedChunker, RecursiveChunker, SentenceChunker, Slab};
 
 // =============================================================================
 // Test Generators
@@ -469,5 +469,92 @@ proptest! {
 
         prop_assert!(chunk_bounds_valid(&slabs, &text));
         prop_assert!(chunk_text_matches(&slabs, &text));
+    }
+}
+
+// =============================================================================
+// compute_char_offsets Property Tests (seam rule)
+// =============================================================================
+
+proptest! {
+    /// compute_char_offsets produces char offsets consistent with manual char counting.
+    #[test]
+    fn char_offsets_match_manual_count(text in arbitrary_text()) {
+        let chunker = FixedChunker::new(50, 10);
+        let mut slabs = chunker.chunk(&text);
+        compute_char_offsets(&text, &mut slabs);
+
+        for slab in &slabs {
+            let char_start = slab.char_start.unwrap();
+            let char_end = slab.char_end.unwrap();
+
+            // Manual: count chars up to byte offset
+            let expected_start = text[..slab.start].chars().count();
+            let expected_end = text[..slab.end].chars().count();
+
+            prop_assert_eq!(char_start, expected_start,
+                "char_start mismatch for slab at byte {}..{}", slab.start, slab.end);
+            prop_assert_eq!(char_end, expected_end,
+                "char_end mismatch for slab at byte {}..{}", slab.start, slab.end);
+
+            // char_end - char_start == slab.text.chars().count()
+            prop_assert_eq!(char_end - char_start, slab.text.chars().count(),
+                "char span length != text char count");
+        }
+    }
+
+    /// compute_char_offsets is idempotent.
+    #[test]
+    fn char_offsets_idempotent(text in arbitrary_text()) {
+        let chunker = FixedChunker::new(30, 5);
+        let mut slabs = chunker.chunk(&text);
+
+        compute_char_offsets(&text, &mut slabs);
+        let first_pass: Vec<_> = slabs.iter()
+            .map(|s| (s.char_start, s.char_end))
+            .collect();
+
+        compute_char_offsets(&text, &mut slabs);
+        let second_pass: Vec<_> = slabs.iter()
+            .map(|s| (s.char_start, s.char_end))
+            .collect();
+
+        prop_assert_eq!(first_pass, second_pass, "compute_char_offsets not idempotent");
+    }
+
+    /// compute_char_offsets on CJK/emoji text produces valid char spans.
+    #[test]
+    fn char_offsets_unicode(
+        parts in prop::collection::vec(
+            prop::sample::select(vec![
+                "hello", "world", "\u{1F600}", "\u{1F4A9}",
+                "\u{4E16}\u{754C}", "\u{0641}\u{0642}", "\u{2764}",
+                "abc", "\u{00E9}\u{00E8}", "\u{1F1FA}\u{1F1F8}",
+            ]),
+            3..15
+        ),
+    ) {
+        let text = parts.join(" ");
+        let chunker = FixedChunker::new(20, 3);
+        let mut slabs = chunker.chunk(&text);
+        compute_char_offsets(&text, &mut slabs);
+
+        for slab in &slabs {
+            let cs = slab.char_start.unwrap();
+            let ce = slab.char_end.unwrap();
+
+            // Char offsets are monotonic
+            prop_assert!(cs <= ce, "char_start > char_end");
+
+            // Char count matches
+            let expected_chars = slab.text.chars().count();
+            prop_assert_eq!(ce - cs, expected_chars,
+                "char span mismatch on unicode text");
+
+            // Reconstructing via chars().skip().take() produces same text
+            let reconstructed: String = text.chars().skip(cs).take(ce - cs).collect();
+            prop_assert_eq!(&reconstructed, &slab.text,
+                "char offset reconstruction failed");
+        }
     }
 }

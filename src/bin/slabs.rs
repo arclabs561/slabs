@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     #[cfg(not(feature = "cli"))]
-    println!("CLI feature is disabled. Build with --features cli to enable.");
+    eprintln!("CLI feature is disabled. Build with --features cli to enable.");
 
     Ok(())
 }

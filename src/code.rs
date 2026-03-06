@@ -248,7 +248,7 @@ impl Chunker for CodeChunker {
                     if !overlap_chunks.is_empty() {
                         overlap_chunks.reverse(); // Forward order
                         let first_idx = overlap_chunks[0];
-                        let last_idx = *overlap_chunks.last().unwrap();
+                        let last_idx = overlap_chunks[overlap_chunks.len() - 1];
 
                         let first_chunk = &atomic_chunks[first_idx];
                         let last_chunk = &atomic_chunks[last_idx];
