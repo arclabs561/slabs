@@ -1,5 +1,5 @@
 #[cfg(feature = "cli")]
-use slabs::{Chunker, FixedChunker, RecursiveChunker, SentenceChunker};
+use slabs::{compute_char_offsets, Chunker, FixedChunker, RecursiveChunker, SentenceChunker};
 #[cfg(feature = "cli")]
 use std::path::PathBuf;
 
@@ -8,10 +8,10 @@ use clap::{Parser, ValueEnum};
 
 #[cfg(feature = "cli")]
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Visualize text chunking strategies", long_about = None)]
+#[command(author, version, about = "Text chunking for RAG pipelines", long_about = None)]
 struct Args {
     /// Strategy to use for chunking
-    #[arg(short, long, value_enum, default_value_t = Strategy::Recursive)]
+    #[arg(short = 'S', long, value_enum, default_value_t = Strategy::Recursive)]
     strategy: Strategy,
 
     /// Max size of each chunk (in characters)
@@ -22,9 +22,13 @@ struct Args {
     #[arg(short, long, default_value_t = 50)]
     overlap: usize,
 
-    /// Input file to chunk
+    /// Output format
+    #[arg(short, long, value_enum, default_value_t = Format::Text)]
+    format: Format,
+
+    /// Input file to chunk (omit or use - for stdin)
     #[arg(value_name = "FILE")]
-    input: PathBuf,
+    input: Option<PathBuf>,
 }
 
 #[cfg(feature = "cli")]
@@ -35,30 +39,79 @@ enum Strategy {
     Recursive,
 }
 
+#[cfg(feature = "cli")]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum Format {
+    Text,
+    Json,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "cli")]
     {
         let args = Args::parse();
-        let text = std::fs::read_to_string(&args.input)?;
+
+        let text = match &args.input {
+            Some(path) if path.to_str() != Some("-") => std::fs::read_to_string(path)?,
+            _ => {
+                use std::io::Read;
+                let mut buf = String::new();
+                std::io::stdin().read_to_string(&mut buf)?;
+                buf
+            }
+        };
 
         let chunker: Box<dyn Chunker> = match args.strategy {
             Strategy::Fixed => Box::new(FixedChunker::new(args.size, args.overlap)),
-            Strategy::Sentence => Box::new(SentenceChunker::new(args.size / 100)), // Approximate sentences
+            Strategy::Sentence => Box::new(SentenceChunker::new(args.size / 100)),
             Strategy::Recursive => {
                 Box::new(RecursiveChunker::new(args.size, &["\n\n", "\n", ". ", " "]))
             }
         };
 
-        let chunks = chunker.chunk(&text);
-        println!(
-            "Found {} chunks using {:?} strategy:",
-            chunks.len(),
-            args.strategy
-        );
+        let mut chunks = chunker.chunk(&text);
+        compute_char_offsets(&text, &mut chunks);
 
-        for (i, chunk) in chunks.iter().enumerate() {
-            println!("\n--- Chunk {} [{}..{}] ---", i, chunk.start, chunk.end);
-            println!("{}", chunk.text);
+        match args.format {
+            Format::Text => {
+                eprintln!(
+                    "Found {} chunks using {:?} strategy:",
+                    chunks.len(),
+                    args.strategy
+                );
+                for (i, chunk) in chunks.iter().enumerate() {
+                    println!("\n--- Chunk {} [{}..{}] ---", i, chunk.start, chunk.end);
+                    println!("{}", chunk.text);
+                }
+            }
+            Format::Json => {
+                let slabs_json: Vec<_> = chunks
+                    .iter()
+                    .map(|s| {
+                        serde_json::json!({
+                            "index": s.index,
+                            "text": s.text,
+                            "start": s.start,
+                            "end": s.end,
+                            "char_start": s.char_start,
+                            "char_end": s.char_end,
+                            "len": s.len(),
+                            "char_len": s.char_len(),
+                        })
+                    })
+                    .collect();
+
+                let envelope = serde_json::json!({
+                    "schema_version": 1,
+                    "strategy": format!("{:?}", args.strategy).to_lowercase(),
+                    "max_size": args.size,
+                    "overlap": args.overlap,
+                    "total_chunks": chunks.len(),
+                    "slabs": slabs_json,
+                });
+
+                println!("{}", serde_json::to_string_pretty(&envelope)?);
+            }
         }
     }
 

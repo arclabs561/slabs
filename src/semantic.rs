@@ -66,7 +66,7 @@ use crate::{Chunker, Error, Result, Slab};
 /// // Uses fastembed's default model (BGE-small-en)
 /// let chunker = SemanticChunker::new(0.5)?;
 ///
-/// let text = "Intro to machine learning. ML is powerful. \
+/// let text = "Intro to machine learning. ML models classify text. \
 ///             The weather today is sunny. It's warm outside.";
 /// let slabs = chunker.chunk(text);
 ///

@@ -14,6 +14,7 @@ categories = ["text-processing"]
 thiserror = "2.0"
 unicode-segmentation = "1.11"
 clap = { version = "4.5", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 
 # Semantic chunking (optional)
 fastembed = { version = "5.8.1", optional = true }
@@ -31,7 +32,7 @@ tree-sitter-go = { version = "0.23", optional = true }
 
 [features]
 default = []
-cli = ["dep:clap"]
+cli = ["dep:clap", "dep:serde_json"]
 semantic = ["dep:fastembed", "dep:innr", "dep:textprep"]
 code = [
     "dep:tree-sitter",

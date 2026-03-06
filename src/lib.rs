@@ -163,9 +163,6 @@ mod semantic;
 #[cfg(feature = "code")]
 mod code;
 
-#[allow(dead_code)]
-mod model;
-
 pub use capacity::{ChunkCapacity, ChunkCapacityError};
 pub use error::{Error, Result};
 pub use fixed::FixedChunker;
