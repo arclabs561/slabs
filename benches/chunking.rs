@@ -2,8 +2,8 @@
 //! Benchmarks for text chunking strategies.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
 use slabs::{Chunker, FixedChunker, RecursiveChunker, SentenceChunker};
+use std::hint::black_box;
 
 fn sample_text(size: usize) -> String {
     // Generate realistic text with sentence structure
