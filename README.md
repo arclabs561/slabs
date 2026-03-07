@@ -35,3 +35,12 @@ for slab in slabs {
 | Sentence | Prose, articles | $O(n)$ |
 | Recursive | General-purpose | $O(n \log n)$ |
 | Semantic | Topic coherence (`semantic` feature) | $O(nd)$ |
+| Late | Contextual embeddings across chunk boundaries | Depends on base chunker |
+
+## Features
+
+| Feature | What it enables |
+|---------|----------------|
+| `semantic` | Semantic chunker (requires `fastembed`, `innr`, `textprep`) |
+| `code` | Code-aware chunker via tree-sitter (Rust, Python, TypeScript, Go) |
+| `cli` | `slabs` CLI binary |
