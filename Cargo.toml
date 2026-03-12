@@ -1,6 +1,6 @@
 [package]
 name = "slabs"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Arc <attobop@gmail.com>"]
 edition = "2021"
 description = "Text chunking for RAG: fixed, sentence, recursive, and semantic strategies"
