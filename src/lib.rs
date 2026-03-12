@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! # slabs
 //!
 //! Text chunking for retrieval-augmented generation (RAG) pipelines.
