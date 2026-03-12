@@ -20,7 +20,7 @@ serde_json = { version = "1", optional = true }
 fastembed = { version = "5.8.1", optional = true }
 
 # SIMD primitives for semantic similarity (ecosystem crate)
-innr = { version = "0.1.6", optional = true }
+innr = { version = "0.1.8", optional = true }
 textprep = { version = "0.1.1", optional = true }
 
 # Code chunking (optional)
