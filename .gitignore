@@ -2,4 +2,3 @@
 .cursor/
 .claude/reports/
 .claude/settings.local.json
-Cargo.lock
