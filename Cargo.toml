@@ -8,11 +8,12 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/arclabs561/slabs"
 keywords = ["chunking", "rag", "nlp", "text", "segmentation"]
 categories = ["text-processing"]
+rust-version = "1.81"
 
 [dependencies]
 # Core
 thiserror = "2.0"
-unicode-segmentation = "1.11"
+unicode-segmentation = ">=1.11, <1.13"
 clap = { version = "4.5", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 
