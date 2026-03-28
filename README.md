@@ -12,7 +12,7 @@ Dual-licensed under MIT or Apache-2.0.
 
 ```toml
 [dependencies]
-slabs = "0.1.0"
+slabs = "0.1.3"
 ```
 
 ```rust
