@@ -61,6 +61,10 @@ impl Slab {
     /// Create a new slab (byte offsets only; char offsets unset).
     #[must_use]
     pub fn new(text: impl Into<String>, start: usize, end: usize, index: usize) -> Self {
+        debug_assert!(
+            start <= end,
+            "Slab start ({start}) must not exceed end ({end})"
+        );
         Self {
             text: text.into(),
             start,
