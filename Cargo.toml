@@ -10,6 +10,8 @@ keywords = ["chunking", "rag", "nlp", "text", "segmentation"]
 categories = ["text-processing"]
 rust-version = "1.81"
 
+[workspace]
+
 [dependencies]
 # Core
 thiserror = "2.0"
