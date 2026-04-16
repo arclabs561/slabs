@@ -22,7 +22,7 @@ jobs:
         run: cargo fmt --check
 
       # Note: semantic feature requires innr (path dep, unavailable in standalone CI)
-      # Test core features only; full integration tested via tekne facade
+      # Test core features only (semantic feature requires innr path dep, unavailable in standalone CI)
       - name: Clippy (strict)
         run: cargo clippy --lib --all-features -- -D clippy::correctness
 
