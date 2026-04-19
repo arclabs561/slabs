@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! # slabs
+//! # code-chunker
 //!
 //! AST-aware code chunking and late chunking for RAG pipelines.
 //!
@@ -25,7 +25,7 @@
 //! `LateChunkingPooler` is span-only: bring your own boundaries from any
 //! source — `CodeChunker`, `text-splitter`, regex, or hand-built `Slab`s.
 //!
-//! ## What slabs does not do
+//! ## What this crate does not do
 //!
 //! - **General-purpose text chunking.** Use [`text-splitter`](https://crates.io/crates/text-splitter)
 //!   for fixed/sentence/recursive prose splitting; it's the de-facto Rust
@@ -42,7 +42,7 @@
 //! ## Quick start (code chunking)
 //!
 //! ```ignore
-//! use slabs::{Chunker, CodeChunker, CodeLanguage};
+//! use code_chunker::{Chunker, CodeChunker, CodeLanguage};
 //!
 //! let chunker = CodeChunker::new(CodeLanguage::Rust, 1500, 0);
 //! let slabs = chunker.chunk(source_code);
@@ -51,7 +51,7 @@
 //! ## Quick start (late chunking)
 //!
 //! ```ignore
-//! use slabs::{LateChunkingPooler, Slab};
+//! use code_chunker::{LateChunkingPooler, Slab};
 //!
 //! // Bring your own chunk boundaries (text-splitter, CodeChunker, ...).
 //! let chunks: Vec<Slab> = my_chunker(&document);
@@ -66,6 +66,7 @@
 
 mod error;
 mod late;
+mod sizer;
 mod slab;
 
 #[cfg(feature = "code")]
@@ -75,21 +76,22 @@ mod recursive;
 
 pub use error::{Error, Result};
 pub use late::LateChunkingPooler;
+pub use sizer::{ByteSizer, ChunkSizer};
 pub use slab::{compute_char_offsets, Slab};
 
 #[cfg(feature = "code")]
 pub use code::{CodeChunker, CodeLanguage};
 
-/// A chunking strategy: text in, slabs out.
+/// A chunking strategy: text in, [`Slab`]s out.
 ///
 /// Implementors override [`chunk_bytes`](Chunker::chunk_bytes); the default
 /// [`chunk`](Chunker::chunk) method adds Unicode character offsets.
 ///
-/// Slabs only ships one public chunker — [`CodeChunker`] — but the trait
-/// is public so users can wrap external chunkers (text-splitter, regex,
-/// custom logic) and feed the output into [`LateChunkingPooler`].
+/// This crate only ships one public chunker — [`CodeChunker`] — but the
+/// trait is public so users can wrap external chunkers (text-splitter,
+/// regex, custom logic) and feed the output into [`LateChunkingPooler`].
 pub trait Chunker: Send + Sync {
-    /// Core chunking implementation returning slabs with byte offsets only.
+    /// Core chunking implementation returning [`Slab`]s with byte offsets only.
     ///
     /// Implementors override this method. Users should call [`chunk`](Chunker::chunk)
     /// instead, which adds character offsets automatically.

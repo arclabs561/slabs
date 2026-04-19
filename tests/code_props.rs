@@ -1,7 +1,7 @@
 #[cfg(feature = "code")]
 mod code_props {
+    use code_chunker::{Chunker, CodeChunker, CodeLanguage};
     use proptest::prelude::*;
-    use slabs::{Chunker, CodeChunker, CodeLanguage};
 
     proptest! {
         #[test]

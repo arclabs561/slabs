@@ -2,8 +2,9 @@
 # https://github.com/repository-settings/app
 
 repository:
-  description: "Text chunking for RAG"
-  homepage: "https://docs.rs/slabs"
+  name: code-chunker
+  description: "AST-aware code chunking and late chunking for RAG"
+  homepage: "https://docs.rs/code-chunker"
   private: false
   has_issues: true
   has_wiki: false
@@ -16,8 +17,8 @@ repository:
 
   topics:
     - chunking
-    - nlp
+    - code-chunking
     - rag
     - rust
-    - segmentation
-    - text-processing
+    - tree-sitter
+    - late-chunking
