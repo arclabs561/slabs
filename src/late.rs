@@ -65,7 +65,7 @@
 //! Günther, Billerbeck, et al. (2024). "Late Chunking: Contextual Chunk
 //! Embeddings Using Long-Context Embedding Models." arXiv:2409.04701.
 
-use crate::{Chunker, Slab};
+use crate::Slab;
 
 /// Late chunking pooler: pools token embeddings into chunk embeddings.
 ///
@@ -246,74 +246,9 @@ impl LateChunkingPooler {
     }
 }
 
-/// Wrapper that applies late chunking to any base chunker.
-///
-/// # Example
-///
-/// ```ignore
-/// use slabs::{LateChunker, SentenceChunker, Chunker};
-///
-/// let base_chunker = SentenceChunker::new(3);
-/// let late = LateChunker::new(base_chunker, 384);
-///
-/// // First, embed full document to get token embeddings
-/// let token_embeddings = embed_document_tokens(&text);
-///
-/// // Get chunk boundaries from base chunker
-/// let chunks = late.chunk(&text);
-///
-/// // Pool token embeddings into chunk embeddings
-/// let chunk_embeddings = late.pool(&token_embeddings, &chunks, text.len());
-/// ```
-#[derive(Debug)]
-pub struct LateChunker<C: Chunker> {
-    /// Base chunker for determining chunk boundaries.
-    base: C,
-    /// Pooler for late chunking.
-    pooler: LateChunkingPooler,
-}
-
-impl<C: Chunker> LateChunker<C> {
-    /// Create a late chunker wrapping a base chunker.
-    pub fn new(base: C, dim: usize) -> Self {
-        Self {
-            base,
-            pooler: LateChunkingPooler::new(dim),
-        }
-    }
-
-    /// Access the pooler for late chunking operations.
-    pub fn pooler(&self) -> &LateChunkingPooler {
-        &self.pooler
-    }
-
-    /// Pool token embeddings into chunk embeddings.
-    ///
-    /// Call this after getting token embeddings from your embedding model.
-    pub fn pool(
-        &self,
-        token_embeddings: &[Vec<f32>],
-        chunks: &[Slab],
-        doc_len: usize,
-    ) -> Vec<Vec<f32>> {
-        self.pooler.pool(token_embeddings, chunks, doc_len)
-    }
-}
-
-impl<C: Chunker> Chunker for LateChunker<C> {
-    fn chunk_bytes(&self, text: &str) -> Vec<Slab> {
-        self.base.chunk_bytes(text)
-    }
-
-    fn estimate_chunks(&self, text_len: usize) -> usize {
-        self.base.estimate_chunks(text_len)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SentenceChunker;
 
     #[test]
     fn test_late_chunking_pooler_basic() {
@@ -347,24 +282,6 @@ mod tests {
             .sum::<f32>()
             .sqrt();
         assert!((norm0 - 1.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_late_chunker_wrapper() {
-        let sentence_chunker = SentenceChunker::new(2);
-        let late = LateChunker::new(sentence_chunker, 384);
-
-        let text = "First sentence. Second sentence. Third sentence. Fourth sentence.";
-        let chunks = late.chunk(text);
-
-        // Should produce chunks like base chunker
-        assert!(!chunks.is_empty());
-
-        // Simulate token embeddings
-        let token_embeddings: Vec<Vec<f32>> = (0..10).map(|i| vec![i as f32; 384]).collect();
-
-        let chunk_embeddings = late.pool(&token_embeddings, &chunks, text.len());
-        assert_eq!(chunk_embeddings.len(), chunks.len());
     }
 
     #[test]

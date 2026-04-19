@@ -40,6 +40,7 @@
 ///            overlap region [8..11]
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Slab {
     /// The chunk text.
     pub text: String,
@@ -126,17 +127,18 @@ impl Slab {
 /// # Example
 ///
 /// ```rust
-/// use slabs::{Chunker, FixedChunker, compute_char_offsets};
+/// use slabs::{compute_char_offsets, Slab};
 ///
 /// let text = "Hello 日本語 world";
-/// let chunker = FixedChunker::new(8, 2);
-/// let mut slabs = chunker.chunk(text);
+/// let mut slabs = vec![
+///     Slab::new("Hello ", 0, 6, 0),
+///     Slab::new("日本語", 6, 15, 1),
+/// ];
 /// compute_char_offsets(text, &mut slabs);
 ///
-/// for slab in &slabs {
-///     assert!(slab.char_start.is_some());
-///     assert!(slab.char_end.is_some());
-/// }
+/// assert_eq!(slabs[0].char_start, Some(0));
+/// assert_eq!(slabs[1].char_start, Some(6));
+/// assert_eq!(slabs[1].char_end, Some(9));
 /// ```
 pub fn compute_char_offsets(text: &str, slabs: &mut [Slab]) {
     if slabs.is_empty() {
