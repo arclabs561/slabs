@@ -1,11 +1,11 @@
 [package]
-name = "code-chunker"
+name = "slabs"
 version = "0.2.0"
 authors = ["Arc <attobop@gmail.com>"]
 edition = "2021"
 description = "AST-aware code chunking and late chunking for RAG"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/arclabs561/code-chunker"
+repository = "https://github.com/arclabs561/slabs"
 keywords = ["chunking", "rag", "code", "tree-sitter", "embedding"]
 categories = ["text-processing"]
 rust-version = "1.81"

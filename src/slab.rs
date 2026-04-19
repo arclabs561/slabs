@@ -12,7 +12,7 @@
 /// matching Rust's string slicing semantics:
 ///
 /// ```rust
-/// use code_chunker::Slab;
+/// use slabs::Slab;
 ///
 /// let text = "Hello, world!";
 /// let slab = Slab::new("world", 7, 12, 0);
@@ -127,7 +127,7 @@ impl Slab {
 /// # Example
 ///
 /// ```rust
-/// use code_chunker::{compute_char_offsets, Slab};
+/// use slabs::{compute_char_offsets, Slab};
 ///
 /// let text = "Hello 日本語 world";
 /// let mut slabs = vec![

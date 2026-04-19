@@ -2,7 +2,7 @@
 //!
 //! Run with: `cargo run --example code_chunking --features code`
 
-use code_chunker::{Chunker, CodeChunker, CodeLanguage};
+use slabs::{Chunker, CodeChunker, CodeLanguage};
 
 fn main() {
     let source = r#"
