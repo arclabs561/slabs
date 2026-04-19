@@ -2,9 +2,9 @@
 # https://github.com/repository-settings/app
 
 repository:
-  name: code-chunker
+  name: slabs
   description: "AST-aware code chunking and late chunking for RAG"
-  homepage: "https://docs.rs/code-chunker"
+  homepage: "https://docs.rs/slabs"
   private: false
   has_issues: true
   has_wiki: false

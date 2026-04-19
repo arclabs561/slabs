@@ -1,8 +1,8 @@
-# code-chunker
+# slabs
 
-[![crates.io](https://img.shields.io/crates/v/code-chunker.svg)](https://crates.io/crates/code-chunker)
-[![Documentation](https://docs.rs/code-chunker/badge.svg)](https://docs.rs/code-chunker)
-[![CI](https://github.com/arclabs561/code-chunker/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/code-chunker/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/slabs.svg)](https://crates.io/crates/slabs)
+[![Documentation](https://docs.rs/slabs/badge.svg)](https://docs.rs/slabs)
+[![CI](https://github.com/arclabs561/slabs/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/slabs/actions/workflows/ci.yml)
 
 AST-aware code chunking and late chunking for RAG.
 
@@ -11,13 +11,13 @@ Two primitives:
 - **`CodeChunker`** — split source code at function/class/impl boundaries via tree-sitter. Rust, Python, TypeScript/JavaScript, Go. Optional import-context injection. Pluggable size metric (bytes by default; bring your own tokenizer).
 - **`LateChunkingPooler`** — pool full-document token embeddings into per-chunk vectors (Günther et al. 2024). Bring your own boundaries from any source.
 
-Successor to [`slabs`](https://crates.io/crates/slabs) 0.1.x. Dual-licensed under MIT or Apache-2.0.
+Dual-licensed under MIT or Apache-2.0.
 
 ## Install
 
 ```toml
 [dependencies]
-code-chunker = { version = "0.2", features = ["code"] }
+slabs = { version = "0.2", features = ["code"] }
 ```
 
 Features:
@@ -35,7 +35,7 @@ recursively at structural separators; unparseable leaves fall back to recursive
 text splitting.
 
 ```rust
-use code_chunker::{Chunker, CodeChunker, CodeLanguage};
+use slabs::{Chunker, CodeChunker, CodeLanguage};
 
 let chunker = CodeChunker::new(CodeLanguage::Rust, 1500, 0);
 let slabs = chunker.chunk(source_code);
@@ -48,7 +48,7 @@ for slab in &slabs {
 Language can also be inferred from a file extension:
 
 ```rust
-use code_chunker::{CodeChunker, CodeLanguage};
+use slabs::{CodeChunker, CodeLanguage};
 let lang = CodeLanguage::from_extension("py").unwrap();
 let chunker = CodeChunker::new(lang, 1500, 0);
 ```
@@ -57,12 +57,12 @@ let chunker = CodeChunker::new(lang, 1500, 0);
 
 Method chunks lose the surrounding `use`/`import` statements that name the
 types they reference. `with_imports(true)` walks the AST once, collects every
-import node, and prepends them to each chunk that doesn't already contain
-them. Retrievers see imports next to call sites instead of stranded at the
-file head.
+top-level import node, and prepends them to each chunk that doesn't already
+contain them. Retrievers see imports next to call sites instead of stranded
+at the file head.
 
 ```rust
-use code_chunker::{CodeChunker, CodeLanguage};
+use slabs::{CodeChunker, CodeLanguage};
 
 let chunker = CodeChunker::new(CodeLanguage::Rust, 1500, 0)
     .with_imports(true);
@@ -84,7 +84,7 @@ Per-language import nodes:
 context limit, plug in your tokenizer through the `ChunkSizer` trait:
 
 ```rust
-use code_chunker::{ChunkSizer, CodeChunker, CodeLanguage};
+use slabs::{ChunkSizer, CodeChunker, CodeLanguage};
 
 struct TiktokenSizer { /* your tokenizer */ }
 
@@ -125,7 +125,7 @@ plus chunk boundaries and returns pooled chunk embeddings. Bring your own
 boundaries from any source.
 
 ```rust
-use code_chunker::{LateChunkingPooler, Slab};
+use slabs::{LateChunkingPooler, Slab};
 
 // 1. Chunk boundaries from any source — text-splitter, CodeChunker, regex, manual.
 let chunks: Vec<Slab> = my_chunker(&document);
@@ -145,7 +145,7 @@ for precise boundary mapping instead of the default linear approximation.
 Late chunking requires holding full-document token embeddings in memory and a
 model whose context window covers the document.
 
-## What this crate does not do
+## What slabs does not do
 
 - **General-purpose text chunking.** Use [`text-splitter`](https://crates.io/crates/text-splitter)
   (1.2M+ downloads) for fixed/sentence/recursive prose splitting. It has
@@ -159,9 +159,9 @@ model whose context window covers the document.
   embeddings. Bring your own model.
 - **Vector store integration.** `Slab` is the boundary; enable the `serde`
   feature and wire to qdrant-client, lancedb, sqlx, etc. yourself.
-- **Cross-file analysis (LSP, type resolution, dependency graphs).** This
-  crate operates on one document at a time. See `tree-sitter-stack-graphs`
-  and `ast-grep` for code-graph tools.
+- **Cross-file analysis (LSP, type resolution, dependency graphs).** Slabs
+  operates on one document at a time. See `tree-sitter-stack-graphs` and
+  `ast-grep` for code-graph tools.
 
 ## Examples
 
@@ -170,21 +170,19 @@ cargo run --example code_chunking --features code
 cargo run --example late_chunking
 ```
 
-## Migrating from `slabs`
+## Migrating from 0.1
 
-This crate is the renamed and narrowed successor to [`slabs`](https://crates.io/crates/slabs).
-The 0.1.x `slabs` releases bundled four general-text chunkers and a CLI;
-those are gone. Replace `slabs = "0.1"` with:
+Removed in 0.2:
 
-```toml
-code-chunker = { version = "0.2", features = ["code"] }
-```
-
-Removed (use [`text-splitter`](https://crates.io/crates/text-splitter) for
-prose chunking):
-
-- `FixedChunker`, `SentenceChunker`, `RecursiveChunker`, `SemanticChunker`
+- `FixedChunker`, `SentenceChunker`, `RecursiveChunker`, `SemanticChunker` →
+  use [`text-splitter`](https://crates.io/crates/text-splitter)
 - `LateChunker<C>` wrapper → use `LateChunkingPooler` directly with
   `Vec<Slab>` from any source
-- `ChunkCapacity` (was unused by any constructor)
-- `slabs` CLI binary
+- `ChunkCapacity` → was unused by any constructor; gone
+- `slabs` CLI binary → use the chunking library APIs directly
+
+Added in 0.2:
+
+- `ChunkSizer` trait + `ByteSizer` default; `CodeChunker::with_sizer()`
+- `CodeChunker::with_imports(true)` for import-context injection
+- `serde` feature for `Slab` serialization

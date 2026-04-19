@@ -2,7 +2,7 @@
 
 #![cfg(feature = "code")]
 
-use code_chunker::{ChunkSizer, Chunker, CodeChunker, CodeLanguage};
+use slabs::{ChunkSizer, Chunker, CodeChunker, CodeLanguage};
 
 const RUST_SAMPLE: &str = r#"use std::collections::HashMap;
 use std::sync::Arc;

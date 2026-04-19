@@ -1,4 +1,4 @@
-//! Error types for code-chunker.
+//! Error types for slabs.
 
 /// Errors that can occur during chunking.
 #[derive(Debug, thiserror::Error)]
@@ -8,5 +8,5 @@ pub enum Error {
     Embedding(String),
 }
 
-/// Result type for code-chunker operations.
+/// Result type for slabs operations.
 pub type Result<T> = std::result::Result<T, Error>;
