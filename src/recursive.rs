@@ -52,19 +52,11 @@
 
 use crate::{Chunker, Slab};
 
-/// Recursive character splitter.
+/// Recursive character splitter — internal fallback for `CodeChunker` on
+/// unparseable leaf nodes (long string literals, comments).
 ///
-/// Splits text using a hierarchy of separators, trying the coarsest first.
-///
-/// ## Example
-///
-/// ```rust
-/// use slabs::{Chunker, RecursiveChunker};
-///
-/// let chunker = RecursiveChunker::new(50, &["\n\n", "\n", ". ", " "]);
-/// let text = "Paragraph one.\n\nParagraph two is longer and might need splitting.";
-/// let slabs = chunker.chunk(text);
-/// ```
+/// Not public API: use [`text-splitter`](https://crates.io/crates/text-splitter)
+/// for general-purpose recursive prose splitting.
 #[derive(Debug, Clone)]
 pub struct RecursiveChunker {
     max_size: usize,
@@ -100,18 +92,6 @@ impl RecursiveChunker {
     pub fn with_overlap(mut self, overlap: usize) -> Self {
         self.overlap = overlap;
         self
-    }
-
-    /// Create a chunker with default separators for prose.
-    #[must_use]
-    pub fn prose(max_size: usize) -> Self {
-        Self::new(max_size, &["\n\n", "\n", ". ", " "])
-    }
-
-    /// Create a chunker with default separators for Markdown.
-    #[must_use]
-    pub fn markdown(max_size: usize) -> Self {
-        Self::new(max_size, &["\n## ", "\n### ", "\n\n", "\n", ". ", " "])
     }
 
     /// Recursively split a chunk using the remaining separators.
@@ -247,9 +227,11 @@ impl Chunker for RecursiveChunker {
 mod tests {
     use super::*;
 
+    const PROSE_SEPS: &[&str] = &["\n\n", "\n", ". ", " "];
+
     #[test]
     fn test_paragraph_split() {
-        let chunker = RecursiveChunker::prose(50);
+        let chunker = RecursiveChunker::new(50, PROSE_SEPS);
         let text =
             "Short.\n\nThis is a longer paragraph that might need splitting into smaller pieces.";
         let slabs = chunker.chunk(text);
@@ -260,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_respects_max_size() {
-        let chunker = RecursiveChunker::prose(20);
+        let chunker = RecursiveChunker::new(20, PROSE_SEPS);
         let text = "The quick brown fox jumps over the lazy dog.";
         let slabs = chunker.chunk(text);
 
@@ -271,32 +253,22 @@ mod tests {
 
     #[test]
     fn test_empty_text() {
-        let chunker = RecursiveChunker::prose(100);
+        let chunker = RecursiveChunker::new(100, PROSE_SEPS);
         let slabs = chunker.chunk("");
         assert!(slabs.is_empty());
     }
 
     #[test]
     fn test_small_text_single_chunk() {
-        let chunker = RecursiveChunker::prose(100);
+        let chunker = RecursiveChunker::new(100, PROSE_SEPS);
         let slabs = chunker.chunk("Small text.");
         assert_eq!(slabs.len(), 1);
     }
 
     #[test]
-    fn test_markdown_headers() {
-        let chunker = RecursiveChunker::markdown(100);
-        let text = "# Title\n\nIntro.\n\n## Section 1\n\nContent 1.\n\n## Section 2\n\nContent 2.";
-        let slabs = chunker.chunk(text);
-
-        // Should respect section boundaries
-        assert!(!slabs.is_empty());
-    }
-
-    #[test]
     #[should_panic]
     fn test_zero_size_panics() {
-        let _ = RecursiveChunker::prose(0);
+        let _ = RecursiveChunker::new(0, PROSE_SEPS);
     }
 
     #[test]

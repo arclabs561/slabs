@@ -139,7 +139,7 @@ impl CodeChunker {
             // Leaf node too big. Fall back to recursive text chunking.
             // This handles long string literals or comments.
             let leaf_text = &code[start_byte..end_byte];
-            let recursive = crate::RecursiveChunker::new(
+            let recursive = crate::recursive::RecursiveChunker::new(
                 self.max_chunk_size,
                 &["\n\n", "\n", " ", ""], // Standard separators
             )

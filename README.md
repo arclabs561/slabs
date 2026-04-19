@@ -4,21 +4,35 @@
 [![Documentation](https://docs.rs/slabs/badge.svg)](https://docs.rs/slabs)
 [![CI](https://github.com/arclabs561/slabs/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/slabs/actions/workflows/ci.yml)
 
-Text and code chunking for RAG pipelines.
+AST-aware code chunking and late chunking for RAG.
+
+Two primitives:
+
+- **`CodeChunker`** — split source code at function/class/impl boundaries via tree-sitter. Rust, Python, TypeScript/JavaScript, Go.
+- **`LateChunkingPooler`** — pool full-document token embeddings into per-chunk vectors (Günther et al. 2024). Bring your own boundaries from any source.
 
 Dual-licensed under MIT or Apache-2.0.
 
-## Quickstart
+## Install
 
 ```toml
 [dependencies]
-slabs = { version = "0.1.4", features = ["code"] }
+slabs = { version = "0.2", features = ["code"] }
 ```
 
-## Code chunking (tree-sitter AST-aware)
+Features:
 
-Splits source files at function, class, and block boundaries rather than at character counts.
-Supports Rust, Python, TypeScript/JavaScript, and Go.
+| Feature | What it enables |
+|---|---|
+| `code` | `CodeChunker` via tree-sitter (Rust, Python, TypeScript, Go) |
+| `serde` | `Serialize`/`Deserialize` on `Slab` for storage backends |
+
+## Code chunking
+
+Splits source files at AST-defined boundaries — keeping functions, classes,
+and impl blocks atomic when they fit the size budget. Oversize nodes are split
+recursively at structural separators; unparseable leaves fall back to recursive
+text splitting.
 
 ```rust
 use slabs::{Chunker, CodeChunker, CodeLanguage};
@@ -27,18 +41,19 @@ let chunker = CodeChunker::new(CodeLanguage::Rust, 1500, 0);
 let slabs = chunker.chunk(source_code);
 
 for slab in &slabs {
-    println!("[{}..{}]:\n{}\n", slab.start, slab.end, slab.text);
+    println!("[{}..{}]\n{}\n", slab.start, slab.end, slab.text);
 }
 ```
 
 Language can also be inferred from a file extension:
 
 ```rust
+use slabs::{CodeChunker, CodeLanguage};
 let lang = CodeLanguage::from_extension("py").unwrap();
 let chunker = CodeChunker::new(lang, 1500, 0);
 ```
 
-AST node types that are kept intact when they fit within `max_chunk_size`:
+AST node types kept atomic when they fit `max_chunk_size` (bytes):
 
 | Language   | Block types                                              |
 |------------|----------------------------------------------------------|
@@ -47,81 +62,71 @@ AST node types that are kept intact when they fit within `max_chunk_size`:
 | TypeScript | `function_declaration`, `class_declaration`, `method_definition`, `interface_declaration`, `enum_declaration` |
 | Go         | `function_declaration`, `method_declaration`, `type_declaration` |
 
-Nodes larger than `max_chunk_size` are split recursively. Leaf nodes that cannot be
-parsed (long string literals, embedded DSLs) fall back to recursive text splitting.
+## Late chunking
 
-## Late chunking (Günther et al. 2024)
+Traditional chunking embeds chunks independently, so cross-chunk references —
+"He became famous" loses the antecedent "Einstein" — degrade retrieval. Late
+chunking embeds the full document first so every token attends to the rest of
+the document, then pools token-level embeddings into per-chunk vectors. The
+result preserves document-wide context.
 
-Traditional chunking embeds each chunk in isolation, so cross-chunk references ("He became
-famous" loses the antecedent "Einstein") degrade retrieval. Late chunking embeds the full
-document first, then pools token-level embeddings into per-chunk vectors.
-
-```rust
-use slabs::{LateChunker, LateChunkingPooler, SentenceChunker, Chunker};
-
-let base = SentenceChunker::new(3);
-let late = LateChunker::new(base, 384); // 384 = embedding dim
-
-// Get chunk boundaries
-let chunks = late.chunk(&document);
-
-// Embed the full document to get token embeddings (shape: [n_tokens, dim])
-let token_embeddings = your_model.embed_tokens(&document);
-
-// Pool into contextualized chunk embeddings
-let chunk_embeddings = late.pool(&token_embeddings, &chunks, document.len());
-```
-
-If you have exact token offsets from the tokenizer, use `pool_with_offsets` for precise
-boundary mapping instead of the default linear approximation.
-
-Typical recall improvement: +5–15% over independent chunk embeddings on documents with
-cross-sentence references. Requires holding full-document token embeddings in memory.
-
-## Semantic chunking (embedding-based)
-
-Splits at topic boundaries detected by embedding similarity drops between adjacent sentences.
+`LateChunkingPooler` is a primitive: it takes pre-computed token embeddings
+plus chunk boundaries and returns pooled chunk embeddings. Bring your own
+boundaries from any source.
 
 ```rust
-use slabs::{Chunker, SemanticChunker};
+use slabs::{LateChunkingPooler, Slab};
 
-let chunker = SemanticChunker::new(0.5)?; // similarity threshold
-let slabs = chunker.chunk(long_document);
+// 1. Chunk boundaries from any source — text-splitter, CodeChunker, regex, manual.
+let chunks: Vec<Slab> = my_chunker(&document);
+
+// 2. Embed the FULL document with a long-context model
+//    (Jina v2/v3, nomic-embed-text, etc.) to get [n_tokens, dim] embeddings.
+let token_embeddings: Vec<Vec<f32>> = my_model.embed_tokens(&document);
+
+// 3. Pool token embeddings inside each chunk's byte span.
+let pooler = LateChunkingPooler::new(384); // dim
+let chunk_embeddings = pooler.pool(&token_embeddings, &chunks, document.len());
 ```
 
-Requires the `semantic` feature (`fastembed`, `innr`, `textprep` dependencies).
+If you have exact token offsets from the tokenizer, use `pool_with_offsets`
+for precise boundary mapping instead of the default linear approximation.
 
-## Prose chunking strategies
+Late chunking requires holding full-document token embeddings in memory and a
+model whose context window covers the document.
 
-| Strategy  | When to use                          | Complexity      |
-|-----------|--------------------------------------|-----------------|
-| Fixed     | Homogeneous content, baselines       | O(n)            |
-| Sentence  | Prose, articles, documentation       | O(n)            |
-| Recursive | General-purpose, mixed content       | O(n log n)      |
-| Semantic  | Topic coherence (`semantic` feature) | O(n × d)        |
+## What slabs does not do
 
-```rust
-use slabs::{Chunker, RecursiveChunker, SentenceChunker, FixedChunker};
+- **General-purpose text chunking.** Use [`text-splitter`](https://crates.io/crates/text-splitter)
+  (1.2M+ downloads) for fixed/sentence/recursive prose splitting. It has
+  broader Unicode handling, token-count sizing, and is the de-facto Rust
+  standard. Wrap its output in `Slab` if you want to feed it to
+  `LateChunkingPooler`.
+- **Format conversion (PDF, HTML, DOCX).** Input is `&str`. Use
+  [`deformat`](https://crates.io/crates/deformat) or
+  [`pdf-extract`](https://crates.io/crates/pdf-extract) upstream.
+- **Embedding generation.** `LateChunkingPooler` consumes pre-computed token
+  embeddings. Bring your own model.
+- **Vector store integration.** `Slab` is the boundary; enable the `serde`
+  feature and wire to qdrant-client, lancedb, sqlx, etc. yourself.
+- **Cross-file analysis (LSP, type resolution, dependency graphs).** Slabs
+  operates on one document at a time. See `tree-sitter-stack-graphs` and
+  `ast-grep` for code-graph tools.
 
-// Recursive: tries paragraphs → lines → sentences → words → chars
-let chunker = RecursiveChunker::prose(500);
-let slabs = chunker.chunk(text);
+## Examples
 
-// Sentence: 3 sentences per chunk, Unicode segmentation (UAX #29)
-let chunker = SentenceChunker::new(3);
-let slabs = chunker.chunk(text);
-
-// Fixed: 200 chars, 40-char overlap
-let chunker = FixedChunker::new(200, 40);
-let slabs = chunker.chunk(text);
+```sh
+cargo run --example code_chunking --features code
+cargo run --example late_chunking
 ```
 
-All chunkers return `Vec<Slab>` with byte and Unicode character offsets populated.
+## Migrating from 0.1
 
-## Features
+Removed in 0.2:
 
-| Feature    | What it enables                                          |
-|------------|----------------------------------------------------------|
-| `code`     | `CodeChunker` via tree-sitter (Rust, Python, TypeScript, Go) |
-| `semantic` | `SemanticChunker` (requires `fastembed`, `innr`, `textprep`) |
-| `cli`      | `slabs` CLI binary                                       |
+- `FixedChunker`, `SentenceChunker`, `RecursiveChunker`, `SemanticChunker` →
+  use [`text-splitter`](https://crates.io/crates/text-splitter)
+- `LateChunker<C>` wrapper → use `LateChunkingPooler` directly with
+  `Vec<Slab>` from any source
+- `ChunkCapacity` → was unused by any constructor; gone
+- `slabs` CLI binary → use the chunking library APIs directly

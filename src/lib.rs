@@ -1,204 +1,93 @@
 #![warn(missing_docs)]
 //! # slabs
 //!
-//! Text chunking for retrieval-augmented generation (RAG) pipelines.
+//! AST-aware code chunking and late chunking for RAG pipelines.
 //!
-//! ## The Problem
+//! ## Two primitives
 //!
-//! Language models have context windows. Documents don't fit. You need to split
-//! them into pieces ("chunks") small enough to embed and retrieve, but large
-//! enough to preserve meaning.
+//! ### `CodeChunker` — split source code at AST boundaries
 //!
-//! This sounds trivial—just split every N characters, right? But consider:
+//! Tree-sitter walks the parse tree and produces chunks aligned to
+//! function, class, impl, and module boundaries. When a node fits the
+//! configured size budget it is kept intact; oversize nodes are split
+//! recursively at structural separators. Supports Rust, Python,
+//! TypeScript/JavaScript, and Go (behind the `code` feature).
 //!
-//! - A sentence split mid-word is garbage
-//! - A paragraph split mid-argument loses coherence
-//! - A code block split mid-function is useless
-//! - Overlap is needed for context continuity, but how much?
+//! ### `LateChunkingPooler` — pool token embeddings into chunk embeddings
 //!
-//! The right chunking strategy depends on your content and retrieval needs.
+//! Late chunking (Günther et al. 2024, arXiv:2409.04701) embeds the full
+//! document first so every token attends to the rest of the document,
+//! then mean-pools token embeddings inside each chunk's byte span. The
+//! result is a per-chunk embedding that carries document-wide context —
+//! pronouns, anaphora, and acronym definitions are no longer lost at
+//! chunk boundaries.
 //!
-//! ## Chunking Strategies
+//! `LateChunkingPooler` is span-only: bring your own boundaries from any
+//! source — `CodeChunker`, `text-splitter`, regex, or hand-built `Slab`s.
 //!
-//! ### Fixed Size (Baseline)
+//! ## What slabs does not do
 //!
-//! The simplest approach: split every N characters with M overlap.
+//! - **General-purpose text chunking.** Use [`text-splitter`](https://crates.io/crates/text-splitter)
+//!   for fixed/sentence/recursive prose splitting; it's the de-facto Rust
+//!   standard with broader Unicode and tokenizer support.
+//! - **Format conversion (PDF, HTML, DOCX).** Input is `&str`. Use
+//!   [`deformat`](https://crates.io/crates/deformat) or
+//!   [`pdf-extract`](https://crates.io/crates/pdf-extract) upstream.
+//! - **Embedding generation.** `LateChunkingPooler` consumes
+//!   pre-computed token embeddings; bring your own long-context model
+//!   (Jina v2/v3, nomic-embed-text, candle, ort).
+//! - **Vector store integration.** [`Slab`] is the boundary; enable the
+//!   `serde` feature and wire to qdrant-client, lancedb, sqlx, etc. yourself.
 //!
-//! ```text
-//! Document: "The quick brown fox jumps over the lazy dog."
-//! Size: 20, Overlap: 5
+//! ## Quick start (code chunking)
 //!
-//! Chunk 0: "The quick brown fox "  [0..20]
-//! Chunk 1: " fox jumps over the "  [15..35]  <- overlap preserves "fox"
-//! Chunk 2: " the lazy dog."        [30..44]
+//! ```ignore
+//! use slabs::{Chunker, CodeChunker, CodeLanguage};
+//!
+//! let chunker = CodeChunker::new(CodeLanguage::Rust, 1500, 0);
+//! let slabs = chunker.chunk(source_code);
 //! ```
 //!
-//! **When to use**: Homogeneous content (logs, code), baseline comparisons.
-//! **Weakness**: Ignores linguistic boundaries—splits mid-sentence.
+//! ## Quick start (late chunking)
 //!
-//! ### Sentence-Based
+//! ```ignore
+//! use slabs::{LateChunkingPooler, Slab};
 //!
-//! Split on sentence boundaries, group N sentences per chunk.
+//! // Bring your own chunk boundaries (text-splitter, CodeChunker, ...).
+//! let chunks: Vec<Slab> = my_chunker(&document);
 //!
-//! The key insight: sentence boundaries are surprisingly hard to detect.
-//! "Dr. Smith went to Washington D.C. on Jan. 15th." has 1 sentence, not 4.
-//! We use Unicode segmentation (UAX #29) which handles most edge cases.
+//! // Embed the full document with a long-context model.
+//! let token_embeddings: Vec<Vec<f32>> = my_model.embed_tokens(&document);
 //!
-//! **When to use**: Prose, articles, documentation.
-//! **Weakness**: Very short or very long sentences cause imbalanced chunks.
-//!
-//! ### Recursive (LangChain-style)
-//!
-//! Try splitting on paragraph breaks first. If chunks are still too large,
-//! split on sentence breaks. If still too large, split on words. Last resort:
-//! split on characters.
-//!
-//! ```text
-//! Separators: ["\n\n", "\n", ". ", " ", ""]
-//!
-//! 1. Try splitting on "\n\n" (paragraphs)
-//! 2. Any chunk > max_size? Split that chunk on "\n" (lines)
-//! 3. Still > max_size? Split on ". " (sentences)
-//! 4. Still > max_size? Split on " " (words)
-//! 5. Still > max_size? Split on "" (characters)
+//! // Pool token embeddings into per-chunk embeddings.
+//! let pooler = LateChunkingPooler::new(384);
+//! let chunk_embeddings = pooler.pool(&token_embeddings, &chunks, document.len());
 //! ```
-//!
-//! **When to use**: General-purpose, mixed content.
-//! **Weakness**: Separator hierarchy is heuristic, not semantic.
-//!
-//! ### Semantic (Embedding-Based)
-//!
-//! Embed each sentence, compute similarity between adjacent sentences,
-//! split where similarity drops below a threshold.
-//!
-//! ```text
-//! Sentences:  [S1, S2, S3, S4, S5, S6]
-//! Embeddings: [E1, E2, E3, E4, E5, E6]
-//! Similarities: [sim(1,2)=0.9, sim(2,3)=0.8, sim(3,4)=0.3, sim(4,5)=0.85, sim(5,6)=0.7]
-//!                                              ↑
-//!                                         Topic shift!
-//!
-//! Chunks: [S1, S2, S3] | [S4, S5, S6]
-//! ```
-//!
-//! **When to use**: When topic coherence matters more than size uniformity.
-//! **Weakness**: Requires embedding model, slower, threshold is a hyperparameter.
-//!
-//! ## Quick Start
-//!
-//! ```rust
-//! use slabs::{Chunker, FixedChunker, SentenceChunker, RecursiveChunker};
-//!
-//! let text = "The quick brown fox jumps over the lazy dog. \
-//!             Pack my box with five dozen liquor jugs.";
-//!
-//! // Fixed size
-//! let chunker = FixedChunker::new(50, 10);
-//! let slabs = chunker.chunk(text);
-//!
-//! // Sentence-based (2 sentences per chunk)
-//! let chunker = SentenceChunker::new(2);
-//! let slabs = chunker.chunk(text);
-//!
-//! // Recursive with custom separators
-//! let chunker = RecursiveChunker::new(100, &["\n\n", "\n", ". ", " "]);
-//! let slabs = chunker.chunk(text);
-//! ```
-//!
-//! ## Semantic Chunking (requires `semantic` feature)
-//!
-//! ```rust,ignore
-//! use slabs::{Chunker, SemanticChunker};
-//!
-//! let chunker = SemanticChunker::new(0.5)?; // threshold
-//! let slabs = chunker.chunk(long_document);
-//! ```
-//!
-//! ## Late Chunking
-//!
-//! Late chunking embeds the full document first, then pools token embeddings
-//! for each chunk. This preserves document-wide context that traditional
-//! chunking loses (e.g., pronouns referring to earlier entities).
-//!
-//! ```rust,ignore
-//! use slabs::{LateChunker, SentenceChunker, Chunker};
-//!
-//! // Wrap any chunker with late chunking
-//! let late = LateChunker::new(SentenceChunker::new(3), 384);
-//!
-//! // Get chunk boundaries
-//! let chunks = late.chunk(&document);
-//!
-//! // Get token embeddings from your embedding model (full document)
-//! let token_embeddings = embed_document_tokens(&document);
-//!
-//! // Pool into contextualized chunk embeddings
-//! let chunk_embeddings = late.pool(&token_embeddings, &chunks, document.len());
-//! ```
-//!
-//! ## Performance Considerations
-//!
-//! | Strategy | Speed | Quality | Memory |
-//! |----------|-------|---------|--------|
-//! | Fixed | O(n) | Low | O(1) |
-//! | Sentence | O(n) | Medium | O(n) |
-//! | Recursive | O(n log n) | Medium | O(n) |
-//! | Semantic | O(n × d) | High | O(n × d) |
-//!
-//! Where n = document length, d = embedding dimension.
-//!
-//! For most RAG applications, **Recursive** is the sweet spot.
-//! Use **Semantic** when retrieval quality justifies the cost.
 
-mod capacity;
 mod error;
-mod fixed;
 mod late;
-mod recursive;
-mod sentence;
 mod slab;
-
-#[cfg(feature = "semantic")]
-mod semantic;
 
 #[cfg(feature = "code")]
 mod code;
+#[cfg(feature = "code")]
+mod recursive;
 
-pub use capacity::{ChunkCapacity, ChunkCapacityError};
 pub use error::{Error, Result};
-pub use fixed::FixedChunker;
-pub use late::{LateChunker, LateChunkingPooler};
-pub use recursive::RecursiveChunker;
-pub use sentence::SentenceChunker;
+pub use late::LateChunkingPooler;
 pub use slab::{compute_char_offsets, Slab};
-
-#[cfg(feature = "semantic")]
-pub use semantic::SemanticChunker;
 
 #[cfg(feature = "code")]
 pub use code::{CodeChunker, CodeLanguage};
 
-/// A text chunking strategy.
+/// A chunking strategy: text in, slabs out.
 ///
-/// All chunkers implement this trait, enabling polymorphic usage:
+/// Implementors override [`chunk_bytes`](Chunker::chunk_bytes); the default
+/// [`chunk`](Chunker::chunk) method adds Unicode character offsets.
 ///
-/// ```rust
-/// use slabs::{Chunker, FixedChunker, SentenceChunker};
-///
-/// fn chunk_document(chunker: &dyn Chunker, text: &str) -> Vec<slabs::Slab> {
-///     chunker.chunk(text)
-/// }
-///
-/// let fixed = FixedChunker::new(100, 20);
-/// let sentence = SentenceChunker::new(3);
-///
-/// let text = "Hello world. This is a test.";
-/// let slabs1 = chunk_document(&fixed, text);
-/// let slabs2 = chunk_document(&sentence, text);
-///
-/// // Character offsets are always populated
-/// assert!(slabs1[0].char_start.is_some());
-/// ```
+/// Slabs only ships one public chunker — [`CodeChunker`] — but the trait
+/// is public so users can wrap external chunkers (text-splitter, regex,
+/// custom logic) and feed the output into [`LateChunkingPooler`].
 pub trait Chunker: Send + Sync {
     /// Core chunking implementation returning slabs with byte offsets only.
     ///
