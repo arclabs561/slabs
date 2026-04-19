@@ -1,3 +1,4 @@
+use crate::sizer::{ByteSizer, ChunkSizer};
 use crate::{Chunker, Slab};
 use tree_sitter::{Language, Node, Parser};
 
@@ -63,40 +64,112 @@ impl CodeLanguage {
             ),
         }
     }
+
+    /// Check if a node type represents a top-level import.
+    pub fn is_import_node(&self, kind: &str) -> bool {
+        match self {
+            Self::Rust => matches!(kind, "use_declaration" | "extern_crate_declaration"),
+            Self::Python => matches!(kind, "import_statement" | "import_from_statement"),
+            Self::TypeScript => matches!(kind, "import_statement"),
+            Self::Go => matches!(kind, "import_declaration"),
+        }
+    }
 }
 
 /// A chunker that respects code structure using tree-sitter.
 ///
-/// It attempts to keep functions, classes, and other code blocks intact.
+/// Functions, classes, and other AST blocks are kept intact when they fit
+/// `max_chunk_size`; oversize nodes split recursively. The size unit
+/// (bytes by default) is determined by the [`ChunkSizer`] — plug in a
+/// tokenizer via [`with_sizer`](Self::with_sizer) to size in tokens.
+/// Enable [`with_imports`](Self::with_imports) to prepend top-level
+/// `use`/`import` statements to non-import chunks.
 pub struct CodeChunker {
     language: CodeLanguage,
     max_chunk_size: usize,
     chunk_overlap: usize,
+    sizer: Box<dyn ChunkSizer>,
+    inject_imports: bool,
 }
 
 impl CodeChunker {
     /// Create a new code chunker.
+    ///
+    /// `max_chunk_size` is in bytes by default (via [`ByteSizer`]). To size
+    /// chunks in tokens, attach a tokenizer-backed sizer with
+    /// [`with_sizer`](Self::with_sizer).
     pub fn new(language: CodeLanguage, max_chunk_size: usize, chunk_overlap: usize) -> Self {
         Self {
             language,
             max_chunk_size,
             chunk_overlap,
+            sizer: Box::new(ByteSizer),
+            inject_imports: false,
         }
+    }
+
+    /// Plug in a custom size metric (tokens, codepoints, etc.).
+    ///
+    /// `max_chunk_size` is then interpreted in whatever unit the sizer returns.
+    #[must_use]
+    pub fn with_sizer<S: ChunkSizer + 'static>(mut self, sizer: S) -> Self {
+        self.sizer = Box::new(sizer);
+        self
+    }
+
+    /// Prepend top-level `use`/`import` declarations to chunks that don't
+    /// already contain them.
+    ///
+    /// Method-only chunks lose the surrounding imports that name the types
+    /// they reference; this restores that context. Increases chunk size by
+    /// the import block length on every non-import chunk — the resulting
+    /// chunk may exceed `max_chunk_size`. The caller owns the budget
+    /// tradeoff; widen `max_chunk_size` to accommodate imports if your
+    /// embedding model has a strict context limit.
+    ///
+    /// When enabled, `slab.text` may contain prepended import text not
+    /// present at the original `slab.start..slab.end` byte range.
+    #[must_use]
+    pub fn with_imports(mut self, inject: bool) -> Self {
+        self.inject_imports = inject;
+        self
+    }
+
+    /// Walk root children, collect import nodes, return (concatenated text, max end byte).
+    fn collect_imports(&self, root: Node, code: &str) -> (String, usize) {
+        let mut imports = String::new();
+        let mut max_end = 0usize;
+        let mut cursor = root.walk();
+        if cursor.goto_first_child() {
+            loop {
+                let node = cursor.node();
+                if self.language.is_import_node(node.kind()) {
+                    let s = node.start_byte();
+                    let e = node.end_byte();
+                    imports.push_str(&code[s..e]);
+                    imports.push('\n');
+                    if e > max_end {
+                        max_end = e;
+                    }
+                }
+                if !cursor.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
+        (imports, max_end)
     }
 
     fn collect_leafs(&self, node: Node, code: &str, chunks: &mut Vec<Slab>) {
         let start_byte = node.start_byte();
         let end_byte = node.end_byte();
-        let len = end_byte - start_byte;
+        let node_text = &code[start_byte..end_byte];
 
-        // If the node fits, we take it as a unit.
-        // If it's a block node, we definitely want to try to keep it together.
-        if len <= self.max_chunk_size {
+        // If the node fits the size budget, take it as a unit.
+        // Block nodes (functions/classes) we especially want to keep together.
+        if self.sizer.size(node_text) <= self.max_chunk_size {
             chunks.push(Slab::new(
-                &code[start_byte..end_byte],
-                start_byte,
-                end_byte,
-                0, // Index fixed later
+                node_text, start_byte, end_byte, 0, // Index fixed later
             ));
             return;
         }
@@ -199,9 +272,17 @@ impl Chunker for CodeChunker {
                 ""
             };
 
-            let added_len = gap.len() + chunk.len();
+            // Size check uses the sizer; for non-byte sizers we recompute
+            // current_text's size each iteration (O(N*T) for token sizers,
+            // acceptable for typical chunk sizes; tokenizer caching is the
+            // user's job if needed).
+            let projected = if current_text.is_empty() {
+                0
+            } else {
+                self.sizer.size(&current_text) + self.sizer.size(gap) + self.sizer.size(&chunk.text)
+            };
 
-            if !current_text.is_empty() && current_text.len() + added_len > self.max_chunk_size {
+            if !current_text.is_empty() && projected > self.max_chunk_size {
                 // Emit current slab
                 slabs.push(Slab::new(
                     current_text.clone(),
@@ -283,6 +364,21 @@ impl Chunker for CodeChunker {
                 current_end,
                 slabs.len(),
             ));
+        }
+
+        // 3. Optional: prepend top-level imports to chunks that don't already
+        //    cover them. Injection may push a chunk past `max_chunk_size` —
+        //    the caller opted in and owns the budget tradeoff.
+        if self.inject_imports {
+            let (imports, import_end) = self.collect_imports(root, text);
+            if !imports.is_empty() {
+                let header = format!("{}\n", imports.trim_end());
+                for slab in slabs.iter_mut() {
+                    if slab.start >= import_end {
+                        slab.text = format!("{}{}", header, slab.text);
+                    }
+                }
+            }
         }
 
         slabs

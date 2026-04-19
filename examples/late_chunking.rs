@@ -11,7 +11,7 @@
 //!
 //! Run with: `cargo run --example late_chunking`
 
-use slabs::{LateChunkingPooler, Slab};
+use code_chunker::{LateChunkingPooler, Slab};
 
 fn main() {
     let document =
