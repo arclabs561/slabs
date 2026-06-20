@@ -1,35 +1,35 @@
 #![warn(missing_docs)]
 //! # slabs
 //!
-//! AST-aware code chunking and late chunking for RAG pipelines.
+//! Retrieval spans and late pooling.
 //!
-//! ## Two primitives
+//! `slabs` centers the [`Slab`] type: a text span with byte and character
+//! offsets in the source document. Use slabs between document extraction,
+//! annotation, embedding, and indexing.
 //!
-//! ### `CodeChunker` — split source code at AST boundaries
+//! ## Core types
 //!
-//! Tree-sitter walks the parse tree and produces chunks aligned to
-//! function, class, impl, and module boundaries. When a node fits the
-//! configured size budget it is kept intact; oversize nodes are split
-//! recursively at structural separators. Supports Rust, Python,
-//! TypeScript/JavaScript, and Go (behind the `code` feature).
+//! ### `Slab`: a retrieval span
 //!
-//! ### `LateChunkingPooler` — pool token embeddings into chunk embeddings
+//! [`Slab`] stores text plus byte and character offsets. It does not decide
+//! how text should be split; it records boundaries from any source.
+//!
+//! ### `LateChunkingPooler`: pool token embeddings into chunk embeddings
 //!
 //! Late chunking (Günther et al. 2024, arXiv:2409.04701) embeds the full
 //! document first so every token attends to the rest of the document,
 //! then mean-pools token embeddings inside each chunk's byte span. The
-//! result is a per-chunk embedding that carries document-wide context —
+//! result is a per-slab embedding that carries document-wide context:
 //! pronouns, anaphora, and acronym definitions are no longer lost at
 //! chunk boundaries.
 //!
 //! `LateChunkingPooler` is span-only: bring your own boundaries from any
-//! source — `CodeChunker`, `text-splitter`, regex, or hand-built `Slab`s.
+//! source: `text-splitter`, parser output, regex, or hand-built `Slab`s.
 //!
 //! ## What slabs does not do
 //!
 //! - **General-purpose text chunking.** Use [`text-splitter`](https://crates.io/crates/text-splitter)
-//!   for fixed/sentence/recursive prose splitting; it's the de-facto Rust
-//!   standard with broader Unicode and tokenizer support.
+//!   for fixed/sentence/recursive prose splitting and code splitting.
 //! - **Format conversion (PDF, HTML, DOCX).** Input is `&str`. Use
 //!   [`deformat`](https://crates.io/crates/deformat) or
 //!   [`pdf-extract`](https://crates.io/crates/pdf-extract) upstream.
@@ -39,21 +39,21 @@
 //! - **Vector store integration.** [`Slab`] is the boundary; enable the
 //!   `serde` feature and wire to qdrant-client, lancedb, sqlx, etc. yourself.
 //!
-//! ## Quick start (code chunking)
+//! ## Quick start (retrieval spans)
 //!
 //! ```ignore
-//! use slabs::{Chunker, CodeChunker, CodeLanguage};
+//! use slabs::Slab;
 //!
-//! let chunker = CodeChunker::new(CodeLanguage::Rust, 1500, 0);
-//! let slabs = chunker.chunk(source_code);
+//! let slab = Slab::new("Ada designed the engine.", 0, 24, 0)
+//!     .with_char_offsets(0, 24);
 //! ```
 //!
-//! ## Quick start (late chunking)
+//! ## Quick start (late pooling)
 //!
 //! ```ignore
 //! use slabs::{LateChunkingPooler, Slab};
 //!
-//! // Bring your own chunk boundaries (text-splitter, CodeChunker, ...).
+//! // Bring your own spans (text-splitter, deformat, anno, parser output, ...).
 //! let chunks: Vec<Slab> = my_chunker(&document);
 //!
 //! // Embed the full document with a long-context model.
@@ -66,30 +66,20 @@
 
 mod error;
 mod late;
-mod sizer;
 mod slab;
-
-#[cfg(feature = "code")]
-mod code;
-#[cfg(feature = "code")]
-mod recursive;
 
 pub use error::{Error, Result};
 pub use late::LateChunkingPooler;
-pub use sizer::{ByteSizer, ChunkSizer};
-pub use slab::{compute_char_offsets, Slab};
-
-#[cfg(feature = "code")]
-pub use code::{CodeChunker, CodeLanguage};
+pub use slab::{compute_char_offsets, slabs_from_byte_ranges, slabs_from_char_ranges, Slab};
 
 /// A chunking strategy: text in, [`Slab`]s out.
 ///
 /// Implementors override [`chunk_bytes`](Chunker::chunk_bytes); the default
 /// [`chunk`](Chunker::chunk) method adds Unicode character offsets.
 ///
-/// Slabs only ships one public chunker — [`CodeChunker`] — but the trait
-/// is public so users can wrap external chunkers (text-splitter, regex,
-/// custom logic) and feed the output into [`LateChunkingPooler`].
+/// Slabs does not ship boundary finders. The trait is public so users can
+/// wrap external chunkers (`text-splitter`, regex, parser output, custom
+/// logic) and feed the output into [`LateChunkingPooler`].
 pub trait Chunker: Send + Sync {
     /// Core chunking implementation returning [`Slab`]s with byte offsets only.
     ///

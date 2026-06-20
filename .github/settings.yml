@@ -3,7 +3,7 @@
 
 repository:
   name: slabs
-  description: "AST-aware code chunking and late chunking for RAG"
+  description: "Retrieval spans and late pooling"
   homepage: "https://docs.rs/slabs"
   private: false
   has_issues: true
@@ -17,8 +17,8 @@ repository:
 
   topics:
     - chunking
-    - code-chunking
+    - retrieval
     - rag
     - rust
-    - tree-sitter
     - late-chunking
+    - embeddings

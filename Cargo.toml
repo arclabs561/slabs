@@ -1,12 +1,12 @@
 [package]
 name = "slabs"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Arc <attobop@gmail.com>"]
 edition = "2021"
-description = "AST-aware code chunking and late chunking for RAG"
+description = "Retrieval spans and late pooling"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/arclabs561/slabs"
-keywords = ["chunking", "rag", "code", "tree-sitter", "embedding"]
+keywords = ["chunking", "rag", "embedding", "retrieval", "spans"]
 categories = ["text-processing"]
 rust-version = "1.81"
 
@@ -14,32 +14,13 @@ rust-version = "1.81"
 
 [dependencies]
 thiserror = "2.0"
-unicode-segmentation = ">=1.11, <1.13"
 
 # Serialization (optional)
 serde = { version = "1", features = ["derive"], optional = true }
 
-# Code chunking (optional)
-tree-sitter = { version = "0.24", optional = true }
-tree-sitter-rust = { version = "0.23", optional = true }
-tree-sitter-python = { version = "0.23", optional = true }
-tree-sitter-typescript = { version = "0.23", optional = true }
-tree-sitter-go = { version = "0.23", optional = true }
-
 [features]
 default = []
 serde = ["dep:serde"]
-code = [
-    "dep:tree-sitter",
-    "dep:tree-sitter-rust",
-    "dep:tree-sitter-python",
-    "dep:tree-sitter-typescript",
-    "dep:tree-sitter-go",
-]
 
 [dev-dependencies]
 proptest = "1.9"
-
-[[example]]
-name = "code_chunking"
-required-features = ["code"]
