@@ -1,4 +1,4 @@
-//! Late Chunking: Embed first, then chunk.
+//! Late chunking: embed first, then pool spans.
 //!
 //! ## The Problem with Traditional Chunking
 //!
@@ -22,12 +22,12 @@
 //! ```text
 //! Document: "Einstein developed relativity. He became famous."
 //!
-//! Step 1: Embed full document → Token embeddings [t1, t2, ..., tn]
+//! Step 1: Embed full document -> Token embeddings [t1, t2, ..., tn]
 //!         Each token "sees" the full document via attention.
 //!
 //! Step 2: Pool chunks from token embeddings:
-//!         Chunk 1: mean_pool([t1, ..., t4])  ← "Einstein developed relativity."
-//!         Chunk 2: mean_pool([t5, ..., t7])  ← "He became famous."
+//!         Chunk 1: mean_pool([t1, ..., t4])  <- "Einstein developed relativity."
+//!         Chunk 2: mean_pool([t5, ..., t7])  <- "He became famous."
 //!                                               "He" now has Einstein context!
 //! ```
 //!
@@ -135,7 +135,7 @@ impl LateChunkingPooler {
             .collect()
     }
 
-    /// Pool with exact token-to-character mappings.
+    /// Pool with exact token byte offsets.
     ///
     /// Use this when you have exact token offsets from the tokenizer,
     /// rather than relying on linear approximation.
@@ -143,7 +143,7 @@ impl LateChunkingPooler {
     /// # Arguments
     ///
     /// * `token_embeddings` - Token-level embeddings [n_tokens, dim].
-    /// * `token_offsets` - Character offset for each token [(start, end), ...].
+    /// * `token_offsets` - Byte offset for each token [(start, end), ...].
     /// * `chunks` - Chunk boundaries.
     pub fn pool_with_offsets(
         &self,
@@ -166,6 +166,51 @@ impl LateChunkingPooler {
                         // Token overlaps with chunk
                         *start < chunk.end && *end > chunk.start
                     })
+                    .map(|(i, _)| i)
+                    .collect();
+
+                if token_indices.is_empty() {
+                    return self.mean_pool(token_embeddings);
+                }
+
+                let selected: Vec<&[f32]> = token_indices
+                    .iter()
+                    .filter_map(|&i| token_embeddings.get(i).map(Vec::as_slice))
+                    .collect();
+
+                self.mean_pool_refs(&selected)
+            })
+            .collect()
+    }
+
+    /// Pool with exact token character offsets.
+    ///
+    /// Use this when a tokenizer reports character offsets instead of byte
+    /// offsets. Each `Slab` should have `char_start` and `char_end` populated,
+    /// for example by [`Slab::from_char_range`](crate::Slab::from_char_range)
+    /// or [`crate::compute_char_offsets`]. A slab without character offsets
+    /// falls back to the full-document average.
+    pub fn pool_with_char_offsets(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        token_offsets: &[(usize, usize)],
+        chunks: &[Slab],
+    ) -> Vec<Vec<f32>> {
+        if token_embeddings.is_empty() || chunks.is_empty() {
+            return vec![vec![0.0; self.dim]; chunks.len()];
+        }
+
+        chunks
+            .iter()
+            .map(|chunk| {
+                let Some(span) = chunk.char_span() else {
+                    return self.mean_pool(token_embeddings);
+                };
+
+                let token_indices: Vec<usize> = token_offsets
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (start, end))| *start < span.end && *end > span.start)
                     .map(|(i, _)| i)
                     .collect();
 
@@ -288,7 +333,7 @@ mod tests {
     fn test_pool_with_exact_offsets() {
         let pooler = LateChunkingPooler::new(3);
 
-        // 5 tokens with known character offsets
+        // 5 tokens with known byte offsets
         let token_embeddings = vec![
             vec![1.0, 0.0, 0.0], // "Hello"
             vec![0.0, 1.0, 0.0], // " "
@@ -329,5 +374,31 @@ mod tests {
         let result = pooler.pool(&[], &chunks, 4);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 4);
+    }
+
+    #[test]
+    fn pool_with_offsets_uses_byte_spans() {
+        let pooler = LateChunkingPooler::new(2);
+        let text = "éclair cake";
+        let chunks = vec![Slab::from_byte_range(text, 0..7, 0).unwrap()];
+        let token_embeddings = vec![vec![2.0, 0.0], vec![0.0, 2.0]];
+        let token_offsets = vec![(0, 7), (8, 12)];
+
+        let pooled = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &chunks);
+
+        assert_eq!(pooled[0], vec![1.0, 0.0]);
+    }
+
+    #[test]
+    fn pool_with_char_offsets_uses_character_spans() {
+        let pooler = LateChunkingPooler::new(2);
+        let text = "éclair cake";
+        let chunks = vec![Slab::from_char_range(text, 0..6, 0).unwrap()];
+        let token_embeddings = vec![vec![2.0, 0.0], vec![0.0, 2.0]];
+        let token_offsets = vec![(0, 6), (7, 11)];
+
+        let pooled = pooler.pool_with_char_offsets(&token_embeddings, &token_offsets, &chunks);
+
+        assert_eq!(pooled[0], vec![1.0, 0.0]);
     }
 }

@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-20
+
+### Added
+
+- `Slab::from_byte_range()` and `Slab::from_char_range()` constructors.
+- Batch constructors for byte and character ranges.
+- `LateChunkingPooler::pool_with_char_offsets()` for tokenizers that report character spans.
+
+### Changed
+
+- Reframed the crate around retrieval spans and late pooling.
+- Clarified that `pool_with_offsets()` expects byte offsets.
+
+### Removed
+
+- Removed the `code` feature, `CodeChunker`, `CodeLanguage`, `ChunkSizer`, and `ByteSizer`.
+- Removed tree-sitter dependencies and the `code_chunking` example.
+
 ## [0.2.0] - 2026-04-19
 
 ### Changed
@@ -37,5 +55,6 @@ All notable changes to this project are documented here. Format based on [Keep a
 
 - Dead `CodeChunkerError` variants and unused exports.
 
+[0.3.0]: https://github.com/arclabs561/slabs/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arclabs561/slabs/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/arclabs561/slabs/releases/tag/v0.1.4
