@@ -1,11 +1,10 @@
-//! Pool fake token embeddings into per-chunk embeddings.
+//! Pool full-document token embeddings over externally chosen spans.
 //!
 //! In a real pipeline:
-//! 1. Use any boundary source (`text-splitter`, parser output, regex, manual) to produce `Vec<Slab>`.
-//! 2. Embed the FULL document with a long-context model (Jina v2/v3, nomic-embed-text)
-//!    to get token-level embeddings of shape `[n_tokens, dim]`.
-//! 3. Pool token embeddings inside each chunk's byte span, preferably with
-//!    exact tokenizer offsets.
+//! 1. Choose boundaries with `text-splitter`, parser output, regex, or an extraction pipeline.
+//! 2. Store those boundaries as `Slab`s.
+//! 3. Embed the full document with a long-context model and keep token offsets.
+//! 4. Pool token embeddings inside each slab's byte span.
 //!
 //! Pool semantics preserve document-wide context: pronouns, anaphora, acronym
 //! definitions are no longer lost at chunk boundaries (Günther et al. 2024).
@@ -13,23 +12,27 @@
 //! Run with: `cargo run --example late_chunking`
 
 use slabs::{LateChunkingPooler, Slab};
+use text_splitter::TextSplitter;
 
 fn main() {
     let document =
         "Einstein developed relativity. He became famous. The theory transformed physics.";
 
-    // Step 1: chunk boundaries from any source. Here, hand-rolled at sentence ends.
-    // In practice, use text-splitter for prose or code, parser output, or
-    // spans from an extraction pipeline.
-    let chunks = vec![
-        Slab::from_byte_range(document, 0..30, 0).unwrap(),
-        Slab::from_byte_range(document, 30..48, 1).unwrap(),
-        Slab::from_byte_range(document, 48..80, 2).unwrap(),
-    ];
-    assert_eq!(chunks.last().map(|chunk| chunk.end), Some(document.len()));
+    // Step 1: boundaries come from another tool. `slabs` records the spans;
+    // it does not decide where text should be split.
+    let splitter = TextSplitter::new(32);
+    let chunks: Vec<Slab> = splitter
+        .chunk_indices(document)
+        .enumerate()
+        .map(|(index, (start, chunk))| {
+            Slab::from_byte_range(document, start..start + chunk.len(), index).unwrap()
+        })
+        .collect();
 
     // Step 2: in a real pipeline, run the document through a long-context embedder
-    // and capture token-level output plus tokenizer offsets. Here we fake both.
+    // and capture token-level output plus tokenizer offsets. Here we use small,
+    // interpretable vectors. Dimensions are:
+    // [Einstein/relativity context, pronoun/anaphora, theory reference, physics].
     let dim = 4;
     let token_offsets = vec![
         (0, 8),   // Einstein
@@ -43,13 +46,18 @@ fn main() {
         (60, 71), // transformed
         (72, 80), // physics.
     ];
-    let n_tokens = token_offsets.len();
-    let token_embeddings: Vec<Vec<f32>> = (0..n_tokens)
-        .map(|i| {
-            let t = i as f32 / n_tokens as f32;
-            vec![t, 1.0 - t, (t * 2.0).sin(), (t * 3.0).cos()]
-        })
-        .collect();
+    let token_embeddings = vec![
+        vec![1.00, 0.00, 0.00, 0.10], // Einstein
+        vec![0.75, 0.00, 0.00, 0.05], // developed
+        vec![0.95, 0.00, 0.20, 0.25], // relativity
+        vec![0.85, 0.90, 0.00, 0.05], // He, contextualized by full-document encoding
+        vec![0.55, 0.20, 0.00, 0.05], // became
+        vec![0.50, 0.10, 0.00, 0.05], // famous
+        vec![0.80, 0.00, 0.95, 0.15], // The, contextualized as the theory
+        vec![0.85, 0.00, 1.00, 0.20], // theory
+        vec![0.30, 0.00, 0.55, 0.85], // transformed
+        vec![0.25, 0.00, 0.40, 1.00], // physics
+    ];
 
     // Step 3: pool. Use exact offsets when the tokenizer provides them.
     // `pool` is available as a fallback when only document length is known.
@@ -57,7 +65,12 @@ fn main() {
     let chunk_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &chunks);
 
     for (chunk, emb) in chunks.iter().zip(&chunk_embeddings) {
-        println!("chunk {}: {:?}", chunk.index, chunk.text);
-        println!("  embedding: {:?}\n", emb);
+        println!(
+            "chunk {} [{:?}]: {:?}",
+            chunk.index,
+            chunk.span(),
+            chunk.text
+        );
+        println!("  pooled [einstein, pronoun, theory, physics]: {emb:.3?}\n");
     }
 }

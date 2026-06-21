@@ -14,11 +14,10 @@ Use `cargo test --examples` to compile the examples.
 
 | Goal | Example | Features | What to inspect |
 |---|---|---|---|
-| Pool full-document token embeddings into chunks | `late_chunking` | default | Fake token embeddings and tokenizer offsets are pooled over chunk byte spans, showing the core late-chunking operation. |
+| Pool full-document token embeddings over spans | `late_chunking` | default | `text-splitter` chooses byte ranges; `Slab` records those ranges; `LateChunkingPooler` pools token vectors over them. |
 
 ## Reading path
 
-Start with `late_chunking` when chunk boundaries already exist and you need to
-pool token-level embeddings from a full-document encoder. Use `text-splitter`,
-parser output, extraction spans, or manual ranges to produce the `Slab`s before
-pooling.
+Start with `late_chunking` when boundaries already exist and you need to pool
+token-level embeddings from a full-document encoder. Boundary selection belongs
+upstream. This crate keeps the spans and performs the pooling step.
