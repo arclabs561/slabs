@@ -1,6 +1,6 @@
 # slabs examples
 
-Examples for late chunk embedding pooling.
+Examples for late pooling over retrieval spans.
 
 ## Running
 
@@ -10,14 +10,14 @@ cargo run --example late_chunking
 
 Use `cargo test --examples` to compile the examples.
 
-## Task map
+## Example map
 
-| Goal | Example | Features | What to inspect |
+| Area | Example | Features | Check |
 |---|---|---|---|
 | Pool full-document token embeddings over spans | `late_chunking` | default | `text-splitter` chooses byte ranges; `Slab` records those ranges; `LateChunkingPooler` pools token vectors over them. |
 
-## Reading path
+## Reading order
 
-Start with `late_chunking` when boundaries already exist and you need to pool
-token-level embeddings from a full-document encoder. Boundary selection belongs
-upstream. This crate keeps the spans and performs the pooling step.
+Read `late_chunking` first. It shows the intended boundary: upstream code
+chooses spans, `slabs` stores those spans, and late pooling turns token vectors
+into one vector per span.

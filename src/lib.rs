@@ -4,8 +4,8 @@
 //! Retrieval spans and late pooling.
 //!
 //! `slabs` centers the [`Slab`] type: a text span with byte and character
-//! offsets in the source document. Use slabs between document extraction,
-//! annotation, embedding, and indexing.
+//! offsets in the exact source string used to create it. Use slabs between
+//! document extraction, annotation, embedding, and indexing.
 //!
 //! ## Core types
 //!
@@ -14,30 +14,29 @@
 //! [`Slab`] stores text plus byte and character offsets. It does not decide
 //! how text should be split; it records boundaries from any source.
 //!
-//! ### `LateChunkingPooler`: pool token embeddings into chunk embeddings
+//! Offsets are source-string relative. If text is normalized, extracted, or
+//! otherwise transformed before slab construction, the offsets refer to that
+//! transformed string, not to an earlier document representation.
+//!
+//! ### `LateChunkingPooler`: pool token embeddings into span embeddings
 //!
 //! Late chunking (Günther et al. 2024, arXiv:2409.04701) embeds the full
 //! document first so every token attends to the rest of the document,
-//! then mean-pools token embeddings inside each chunk's byte span. The
-//! result is a per-slab embedding that carries document-wide context:
-//! pronouns, anaphora, and acronym definitions are no longer lost at
-//! chunk boundaries.
+//! then mean-pools token embeddings inside each slab's span and L2-normalizes
+//! the result. The output is a fixed-width vector for each slab.
 //!
 //! `LateChunkingPooler` is span-only: bring your own boundaries from any
 //! source: `text-splitter`, parser output, regex, or hand-built `Slab`s.
 //!
-//! ## What slabs does not do
+//! ## Scope
 //!
-//! - **General-purpose text chunking.** Use [`text-splitter`](https://crates.io/crates/text-splitter)
-//!   for fixed/sentence/recursive prose splitting and code splitting.
-//! - **Format conversion (PDF, HTML, DOCX).** Input is `&str`. Use
-//!   [`deformat`](https://crates.io/crates/deformat) or
-//!   [`pdf-extract`](https://crates.io/crates/pdf-extract) upstream.
-//! - **Embedding generation.** `LateChunkingPooler` consumes
-//!   pre-computed token embeddings; bring your own long-context model
-//!   (Jina v2/v3, nomic-embed-text, candle, ort).
-//! - **Vector store integration.** [`Slab`] is the boundary; enable the
-//!   `serde` feature and wire to qdrant-client, lancedb, sqlx, etc. yourself.
+//! - Boundary finding is upstream.
+//! - Format conversion is upstream; input is already `&str`.
+//! - Embedding generation is upstream; [`LateChunkingPooler`] consumes token
+//!   vectors.
+//! - Storage is downstream; enable the `serde` feature when spans need to cross
+//!   a storage or service boundary.
+//! - Cross-file analysis is out of scope; a slab refers to one source string.
 //!
 //! ## Quick start (retrieval spans)
 //!
@@ -54,14 +53,14 @@
 //! use slabs::{LateChunkingPooler, Slab};
 //!
 //! // Bring your own spans (text-splitter, deformat, anno, parser output, ...).
-//! let chunks: Vec<Slab> = my_chunker(&document);
+//! let spans: Vec<Slab> = boundary_source(&document);
 //!
 //! // Embed the full document with a long-context model.
 //! let token_embeddings: Vec<Vec<f32>> = my_model.embed_tokens(&document);
 //!
-//! // Pool token embeddings into per-chunk embeddings.
+//! // Pool token embeddings into per-span embeddings.
 //! let pooler = LateChunkingPooler::new(384);
-//! let chunk_embeddings = pooler.pool(&token_embeddings, &chunks, document.len());
+//! let span_embeddings = pooler.pool(&token_embeddings, &spans, document.len());
 //! ```
 
 mod error;
@@ -72,7 +71,38 @@ pub use error::{Error, Result};
 pub use late::LateChunkingPooler;
 pub use slab::{compute_char_offsets, slabs_from_byte_ranges, slabs_from_char_ranges, Slab};
 
-/// A chunking strategy: text in, [`Slab`]s out.
+/// A source of already-chosen [`Slab`] boundaries.
+///
+/// Implementors choose or receive text boundaries elsewhere, then return
+/// slabs for those boundaries. This trait exists for adapters around
+/// `text-splitter`, parser output, regex matches, extraction spans, or
+/// product-specific boundary logic.
+pub trait SlabSource: Send + Sync {
+    /// Return [`Slab`]s with byte offsets only.
+    ///
+    /// Implementors override this method. Users should call
+    /// [`slabs`](SlabSource::slabs) instead, which adds character offsets
+    /// automatically.
+    fn slab_bytes(&self, text: &str) -> Vec<Slab>;
+
+    /// Return slabs with both byte and character offsets.
+    ///
+    /// Offsets are relative to the exact `text` argument passed here.
+    fn slabs(&self, text: &str) -> Vec<Slab> {
+        let mut slabs = self.slab_bytes(text);
+        compute_char_offsets(text, &mut slabs);
+        slabs
+    }
+
+    /// Estimate the number of slabs for a given text length.
+    ///
+    /// Useful for pre-allocation. May be approximate.
+    fn estimate_slabs(&self, text_len: usize) -> usize {
+        (text_len / 500).max(1)
+    }
+}
+
+/// Compatibility adapter trait: text in, [`Slab`]s out.
 ///
 /// Implementors override [`chunk_bytes`](Chunker::chunk_bytes); the default
 /// [`chunk`](Chunker::chunk) method adds Unicode character offsets.
@@ -80,6 +110,9 @@ pub use slab::{compute_char_offsets, slabs_from_byte_ranges, slabs_from_char_ran
 /// Slabs does not ship boundary finders. The trait is public so users can
 /// wrap external chunkers (`text-splitter`, regex, parser output, custom
 /// logic) and feed the output into [`LateChunkingPooler`].
+///
+/// Prefer [`SlabSource`] for new adapters. `Chunker` remains available for
+/// existing code that already uses chunking vocabulary at the boundary source.
 pub trait Chunker: Send + Sync {
     /// Core chunking implementation returning [`Slab`]s with byte offsets only.
     ///
@@ -102,7 +135,20 @@ pub trait Chunker: Send + Sync {
     ///
     /// Useful for pre-allocation. May be approximate.
     fn estimate_chunks(&self, text_len: usize) -> usize {
-        // Conservative default
         (text_len / 500).max(1)
+    }
+}
+
+impl<T: Chunker + ?Sized> SlabSource for T {
+    fn slab_bytes(&self, text: &str) -> Vec<Slab> {
+        self.chunk_bytes(text)
+    }
+
+    fn slabs(&self, text: &str) -> Vec<Slab> {
+        self.chunk(text)
+    }
+
+    fn estimate_slabs(&self, text_len: usize) -> usize {
+        self.estimate_chunks(text_len)
     }
 }

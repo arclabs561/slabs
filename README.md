@@ -10,8 +10,9 @@ Retrieval spans and late pooling.
 utilities for pooling token embeddings over those spans. Use it between
 document extraction, annotation, embedding, and indexing.
 
-- **`Slab`**: text plus byte/character offsets in the source document.
-- **`LateChunkingPooler`**: pool full-document token embeddings into per-chunk vectors (Günther et al. 2024). Bring your own boundaries from any source.
+- `Slab`: text plus byte and character offsets in the source string.
+- `LateChunkingPooler`: pool full-document token embeddings into span vectors
+  (Günther et al. 2024). Boundaries come from upstream code.
 
 Dual-licensed under MIT or Apache-2.0.
 
@@ -47,6 +48,11 @@ assert_eq!(slab.char_span(), Some(0..24));
 Boundary sources can be manual spans, `text-splitter`, `deformat` segments,
 or `anno` RAG chunks.
 
+Offsets are relative to the exact string used to construct the slab. If text is
+normalized, extracted, or otherwise transformed before slab construction, the
+offsets refer to that transformed string. Preserve a separate mapping when the
+original document offsets are also required.
+
 ## Late pooling
 
 Traditional chunking embeds chunks independently, so cross-chunk references
@@ -57,12 +63,12 @@ the document, then pools token-level embeddings over each `Slab` span.
 ```rust
 use slabs::{LateChunkingPooler, Slab};
 
-let chunks: Vec<Slab> = make_spans(&document);
+let spans: Vec<Slab> = make_spans(&document);
 let token_embeddings: Vec<Vec<f32>> = embed_full_document_tokens(&document);
 let token_offsets: Vec<(usize, usize)> = tokenizer_offsets(&document);
 
 let pooler = LateChunkingPooler::new(384);
-let chunk_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &chunks);
+let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
 ```
 
 Use `pool_with_offsets` when your tokenizer exposes exact byte offsets. Use
@@ -70,27 +76,19 @@ Use `pool_with_offsets` when your tokenizer exposes exact byte offsets. Use
 have `char_start`/`char_end`. Use `pool` only as an approximation when you
 have token embeddings and document length but no offsets.
 
-Late pooling requires holding full-document token embeddings in memory and a
-model whose context window covers the document.
+Each returned vector is the L2-normalized mean of the token vectors overlapping
+the slab. Late pooling requires holding full-document token embeddings in memory
+and a model whose context window covers the document.
 
-## What slabs does not do
+## Scope
 
-- **General-purpose text chunking.** Use [`text-splitter`](https://crates.io/crates/text-splitter)
-  for fixed/sentence/recursive prose splitting and code splitting through its
-  `code` feature. Wrap its output in `Slab` if you want to feed it to
-  `LateChunkingPooler`.
-- **Format conversion (PDF, HTML, DOCX).** Input is `&str`. Use
-  [`deformat`](https://crates.io/crates/deformat) or
-  [`pdf-extract`](https://crates.io/crates/pdf-extract) upstream.
-- **Annotation or RAG rewriting.** Use [`anno`](https://crates.io/crates/anno)
-  when chunks need entities, PII handling, or coreference rewrites.
-- **Embedding generation.** `LateChunkingPooler` consumes pre-computed token
-  embeddings. Bring your own model.
-- **Vector store integration.** `Slab` is the boundary; enable the `serde`
-  feature and wire to qdrant-client, lancedb, sqlx, etc. yourself.
-- **Cross-file analysis (LSP, type resolution, dependency graphs).** Slabs
-  operates on one document at a time. See `tree-sitter-stack-graphs` and
-  `ast-grep` for code-graph tools.
+- Boundary finding is upstream. `slabs` records selected ranges and pools over
+  them.
+- Input text is already `&str`. Format conversion is upstream.
+- Embedding generation is upstream. `LateChunkingPooler` consumes token vectors.
+- Storage is downstream. Enable `serde` on `Slab` when spans need to cross a
+  storage or service boundary.
+- Cross-file code analysis is out of scope. A slab refers to one source string.
 
 ## Examples
 

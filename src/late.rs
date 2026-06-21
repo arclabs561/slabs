@@ -1,23 +1,23 @@
 //! Late chunking: embed first, then pool spans.
 //!
-//! ## The Problem with Traditional Chunking
+//! ## Independent chunk embedding
 //!
-//! Traditional chunking embeds chunks independently:
+//! Independent chunk embedding embeds chunks separately:
 //!
 //! ```text
 //! Document: "Einstein developed relativity. He became famous."
 //! Chunks:   ["Einstein developed relativity.", "He became famous."]
 //! Embeddings: [embed(chunk1), embed(chunk2)]
 //!                              ↑
-//!                              "He" loses context!
+//!                              "He" has no antecedent in this input.
 //! ```
 //!
 //! The second chunk embeds "He" without knowing it refers to Einstein.
 //!
-//! ## Late Chunking Solution
+//! ## Late pooling
 //!
 //! Late chunking (Günther et al. 2024) embeds the full document first,
-//! then pools token embeddings for each chunk:
+//! then pools token embeddings for each span:
 //!
 //! ```text
 //! Document: "Einstein developed relativity. He became famous."
@@ -25,40 +25,36 @@
 //! Step 1: Embed full document -> Token embeddings [t1, t2, ..., tn]
 //!         Each token "sees" the full document via attention.
 //!
-//! Step 2: Pool chunks from token embeddings:
-//!         Chunk 1: mean_pool([t1, ..., t4])  <- "Einstein developed relativity."
-//!         Chunk 2: mean_pool([t5, ..., t7])  <- "He became famous."
+//! Step 2: Pool spans from token embeddings:
+//!         Span 1: mean_pool([t1, ..., t4])  <- "Einstein developed relativity."
+//!         Span 2: mean_pool([t5, ..., t7])  <- "He became famous."
 //!                                               "He" now has Einstein context!
 //! ```
 //!
-//! ## The Math
+//! ## Pooling rule
 //!
 //! Given token embeddings H = [h1, h2, ..., hn] from full document,
-//! and chunk boundaries [(s1, e1), (s2, e2), ...]:
+//! and span boundaries [(s1, e1), (s2, e2), ...]:
 //!
 //! ```text
-//! chunk_embedding_i = (1 / |ei - si|) * Σ_{t=si}^{ei} ht
+//! span_embedding_i = (1 / |ei - si|) * Σ_{t=si}^{ei} ht
 //! ```
 //!
-//! Mean pooling preserves the contextual information each token gained
-//! from attending to the full document.
+//! The returned vector is the L2-normalized mean vector.
 //!
-//! ## When to Use
+//! ## Scope
 //!
-//! - **Use Late Chunking**: When chunks reference each other (pronouns,
-//!   acronym definitions, temporal references). Long coherent documents.
-//!
-//! - **Use Traditional**: Independent chunks, real-time embedding needed,
-//!   memory-constrained (late chunking needs full doc in memory).
+//! Use this module when boundaries already exist and token embeddings come
+//! from a full-document encoder. Boundary selection and embedding generation
+//! are upstream concerns.
 //!
 //! ## Trade-offs
 //!
-//! | Aspect | Traditional | Late Chunking |
+//! | Aspect | Independent chunk embedding | Late pooling |
 //! |--------|-------------|---------------|
 //! | Memory | O(chunk_size) | O(doc_length × dim) |
 //! | Context | Local only | Full document |
 //! | Speed | Parallel chunks | Sequential doc first |
-//! | Quality | Baseline | +5-15% recall typically |
 //!
 //! ## References
 //!
@@ -67,14 +63,13 @@
 
 use crate::Slab;
 
-/// Late chunking pooler: pools token embeddings into chunk embeddings.
+/// Late chunking pooler: pools token embeddings into span embeddings.
 ///
-/// This is the core operation of late chunking. Given token-level embeddings
-/// from a full document, it pools the tokens within each chunk boundary
-/// to create contextualized chunk embeddings.
+/// Given token-level embeddings from a full document, it pools the tokens
+/// within each [`Slab`] boundary and returns one L2-normalized vector per slab.
 #[derive(Debug, Clone)]
 pub struct LateChunkingPooler {
-    /// Embedding dimension (for validation).
+    /// Output dimension and expected token embedding dimension.
     dim: usize,
 }
 
@@ -83,28 +78,30 @@ impl LateChunkingPooler {
     ///
     /// # Arguments
     ///
-    /// * `dim` - Embedding dimension (e.g., 384 for all-MiniLM-L6-v2)
+    /// * `dim` - output dimension and expected token embedding dimension.
     pub fn new(dim: usize) -> Self {
         Self { dim }
     }
 
-    /// Pool token embeddings into chunk embeddings.
+    /// Pool token embeddings into slab embeddings.
     ///
     /// # Arguments
     ///
     /// * `token_embeddings` - Token-level embeddings from full document.
     ///   Shape: [n_tokens, dim]. Each token has "seen" the full document.
-    /// * `chunks` - Chunk boundaries from any chunker.
+    /// * `chunks` - span boundaries from any source.
     /// * `doc_len` - Total document length in bytes (for mapping).
     ///
     /// # Returns
     ///
-    /// Contextualized chunk embeddings. Each chunk embedding is the mean
-    /// of its constituent token embeddings.
+    /// One L2-normalized mean vector per slab. Each output vector has length
+    /// `dim`.
     ///
-    /// # Panics
+    /// # Dimension contract
     ///
-    /// Panics if token embeddings have inconsistent dimensions.
+    /// Token vectors are expected to have `dim` components. Debug builds assert
+    /// that contract. Release builds use the first `dim` components and treat
+    /// missing components as zero.
     pub fn pool(
         &self,
         token_embeddings: &[Vec<f32>],
@@ -120,13 +117,13 @@ impl LateChunkingPooler {
         chunks
             .iter()
             .map(|chunk| {
-                // Map byte offsets to token indices (linear approximation)
+                // Map byte offsets to token indices (linear approximation).
                 let token_start = (chunk.start as f64 / doc_len as f64 * n_tokens as f64) as usize;
                 let token_end =
                     ((chunk.end as f64 / doc_len as f64 * n_tokens as f64) as usize).min(n_tokens);
 
                 if token_end <= token_start {
-                    // Fallback: use full document average
+                    // Fallback: use full document average.
                     return self.mean_pool(token_embeddings);
                 }
 
@@ -144,7 +141,7 @@ impl LateChunkingPooler {
     ///
     /// * `token_embeddings` - Token-level embeddings [n_tokens, dim].
     /// * `token_offsets` - Byte offset for each token [(start, end), ...].
-    /// * `chunks` - Chunk boundaries.
+    /// * `chunks` - span boundaries.
     pub fn pool_with_offsets(
         &self,
         token_embeddings: &[Vec<f32>],
@@ -158,12 +155,12 @@ impl LateChunkingPooler {
         chunks
             .iter()
             .map(|chunk| {
-                // Find tokens that overlap with this chunk
+                // Find tokens that overlap with this slab.
                 let token_indices: Vec<usize> = token_offsets
                     .iter()
                     .enumerate()
                     .filter(|(_, (start, end))| {
-                        // Token overlaps with chunk
+                        // Token overlaps with slab.
                         *start < chunk.end && *end > chunk.start
                     })
                     .map(|(i, _)| i)
@@ -234,12 +231,18 @@ impl LateChunkingPooler {
             return vec![0.0; self.dim];
         }
 
-        let dim = embeddings[0].len();
-        let mut result = vec![0.0; dim];
+        let mut result = vec![0.0; self.dim];
         let count = embeddings.len() as f32;
 
         for emb in embeddings {
-            for (i, &v) in emb.iter().enumerate() {
+            debug_assert_eq!(
+                emb.len(),
+                self.dim,
+                "token embedding dimension mismatch: expected {}, got {}",
+                self.dim,
+                emb.len()
+            );
+            for (i, &v) in emb.iter().take(self.dim).enumerate() {
                 result[i] += v;
             }
         }
@@ -248,7 +251,7 @@ impl LateChunkingPooler {
             *v /= count;
         }
 
-        // L2 normalize
+        // L2 normalize.
         let norm: f32 = result.iter().map(|x| x * x).sum::<f32>().sqrt();
         if norm > 1e-9 {
             for v in &mut result {
@@ -265,12 +268,18 @@ impl LateChunkingPooler {
             return vec![0.0; self.dim];
         }
 
-        let dim = embeddings[0].len();
-        let mut result = vec![0.0; dim];
+        let mut result = vec![0.0; self.dim];
         let count = embeddings.len() as f32;
 
         for emb in embeddings {
-            for (i, &v) in emb.iter().enumerate() {
+            debug_assert_eq!(
+                emb.len(),
+                self.dim,
+                "token embedding dimension mismatch: expected {}, got {}",
+                self.dim,
+                emb.len()
+            );
+            for (i, &v) in emb.iter().take(self.dim).enumerate() {
                 result[i] += v;
             }
         }
@@ -279,7 +288,7 @@ impl LateChunkingPooler {
             *v /= count;
         }
 
-        // L2 normalize
+        // L2 normalize.
         let norm: f32 = result.iter().map(|x| x * x).sum::<f32>().sqrt();
         if norm > 1e-9 {
             for v in &mut result {
@@ -309,23 +318,19 @@ mod tests {
             vec![0.0, 0.0, 1.0, 1.0],
         ];
 
-        let chunks = vec![
+        let spans = vec![
             Slab::new("first chunk", 0, 10, 0),
             Slab::new("second chunk", 10, 20, 1),
         ];
 
-        let chunk_embeddings = pooler.pool(&token_embeddings, &chunks, 20);
+        let span_embeddings = pooler.pool(&token_embeddings, &spans, 20);
 
-        assert_eq!(chunk_embeddings.len(), 2);
-        assert_eq!(chunk_embeddings[0].len(), 4);
-        assert_eq!(chunk_embeddings[1].len(), 4);
+        assert_eq!(span_embeddings.len(), 2);
+        assert_eq!(span_embeddings[0].len(), 4);
+        assert_eq!(span_embeddings[1].len(), 4);
 
         // Embeddings should be normalized
-        let norm0: f32 = chunk_embeddings[0]
-            .iter()
-            .map(|x| x * x)
-            .sum::<f32>()
-            .sqrt();
+        let norm0: f32 = span_embeddings[0].iter().map(|x| x * x).sum::<f32>().sqrt();
         assert!((norm0 - 1.0).abs() < 0.01);
     }
 
@@ -374,6 +379,33 @@ mod tests {
         let result = pooler.pool(&[], &chunks, 4);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].len(), 4);
+    }
+
+    #[test]
+    fn pool_uses_configured_output_dimension() {
+        let pooler = LateChunkingPooler::new(3);
+        let chunks = vec![Slab::new("abc", 0, 3, 0)];
+        let token_embeddings = vec![vec![2.0, 0.0, 0.0], vec![0.0, 2.0, 0.0]];
+
+        let pooled = pooler.pool(&token_embeddings, &chunks, 3);
+
+        assert_eq!(pooled.len(), 1);
+        assert_eq!(pooled[0].len(), 3);
+        let norm = pooled[0].iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn pool_with_offsets_uses_configured_output_dimension() {
+        let pooler = LateChunkingPooler::new(3);
+        let chunks = vec![Slab::new("abc", 0, 3, 0)];
+        let token_embeddings = vec![vec![2.0, 0.0, 0.0]];
+        let token_offsets = vec![(0, 3)];
+
+        let pooled = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &chunks);
+
+        assert_eq!(pooled.len(), 1);
+        assert_eq!(pooled[0].len(), 3);
     }
 
     #[test]

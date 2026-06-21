@@ -1,17 +1,17 @@
-//! The Slab type: a chunk of text with position metadata.
+//! The Slab type: a text span with position metadata.
 
 use std::ops::Range;
 
 use crate::{Error, Result};
 
-/// A chunk of text with its position in the original document.
+/// A text span with its position in the source string.
 ///
-/// A slab is a self-contained piece that can be embedded, indexed, and
-/// retrieved while preserving where it came from in the source text.
+/// A slab is a self-contained span that can be embedded, indexed, and
+/// retrieved while preserving where it came from in the text used to create it.
 ///
 /// ## Offsets
 ///
-/// Primary offsets (`start`/`end`) are byte offsets into the original text,
+/// Primary offsets (`start`/`end`) are byte offsets into the source string,
 /// matching Rust's string slicing semantics:
 ///
 /// ```rust
@@ -20,19 +20,20 @@ use crate::{Error, Result};
 /// let text = "Hello, world!";
 /// let slab = Slab::new("world", 7, 12, 0);
 ///
-/// // The offsets let you recover the original position
+/// // The offsets let you recover the source position.
 /// assert_eq!(&text[slab.start..slab.end], "world");
 /// ```
 ///
 /// Character offsets (`char_start`/`char_end`) are automatically populated
-/// when using [`Chunker::chunk`](crate::Chunker::chunk). They count Unicode
+/// when using [`SlabSource::slabs`](crate::SlabSource::slabs) or the
+/// range constructors. They count Unicode
 /// scalar values (`char`s), useful for NLP systems that index by character
-/// position. Only `None` when using [`Chunker::chunk_bytes`](crate::Chunker::chunk_bytes)
-/// directly.
+/// position. They are `None` when constructing with [`Slab::new`] or returning
+/// byte-only spans from [`SlabSource::slab_bytes`](crate::SlabSource::slab_bytes).
 ///
 /// ## Overlap Handling
 ///
-/// When chunks overlap, adjacent slabs share some text. The `index` field
+/// When spans overlap, adjacent slabs share some text. The `index` field
 /// identifies each slab's position in the sequence:
 ///
 /// ```text
@@ -45,19 +46,19 @@ use crate::{Error, Result};
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Slab {
-    /// The chunk text.
+    /// The span text.
     pub text: String,
-    /// Byte offset where this chunk starts in the original document.
+    /// Byte offset where this span starts in the source string.
     pub start: usize,
-    /// Byte offset where this chunk ends (exclusive) in the original document.
+    /// Byte offset where this span ends (exclusive) in the source string.
     pub end: usize,
-    /// Character offset where this chunk starts (Unicode scalar values).
+    /// Character offset where this span starts (Unicode scalar values).
     /// `None` until [`with_char_offsets`](Slab::with_char_offsets) or
     /// [`compute_char_offsets`] is called.
     pub char_start: Option<usize>,
-    /// Character offset where this chunk ends (exclusive, Unicode scalar values).
+    /// Character offset where this span ends (exclusive, Unicode scalar values).
     pub char_end: Option<usize>,
-    /// Zero-based index of this chunk in the sequence.
+    /// Zero-based index of this span in the sequence.
     pub index: usize,
 }
 
@@ -132,25 +133,25 @@ impl Slab {
         self
     }
 
-    /// The length of this chunk in bytes.
+    /// The length of this span in bytes.
     #[must_use]
     pub fn len(&self) -> usize {
         self.text.len()
     }
 
-    /// The length of this chunk in characters (Unicode scalar values).
+    /// The length of this span in characters (Unicode scalar values).
     #[must_use]
     pub fn char_len(&self) -> usize {
         self.text.chars().count()
     }
 
-    /// Whether this chunk is empty.
+    /// Whether this span is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.text.is_empty()
     }
 
-    /// The byte span of this chunk in the original document.
+    /// The byte span in the source string.
     #[must_use]
     pub fn span(&self) -> std::ops::Range<usize> {
         self.start..self.end

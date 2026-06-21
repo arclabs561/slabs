@@ -6,8 +6,8 @@
 //! 3. Embed the full document with a long-context model and keep token offsets.
 //! 4. Pool token embeddings inside each slab's byte span.
 //!
-//! Pool semantics preserve document-wide context: pronouns, anaphora, acronym
-//! definitions are no longer lost at chunk boundaries (Günther et al. 2024).
+//! Pool semantics preserve document-wide context for spans that contain
+//! pronouns, anaphora, or acronym references (Günther et al. 2024).
 //!
 //! Run with: `cargo run --example late_chunking`
 
@@ -21,7 +21,7 @@ fn main() {
     // Step 1: boundaries come from another tool. `slabs` records the spans;
     // it does not decide where text should be split.
     let splitter = TextSplitter::new(32);
-    let chunks: Vec<Slab> = splitter
+    let spans: Vec<Slab> = splitter
         .chunk_indices(document)
         .enumerate()
         .map(|(index, (start, chunk))| {
@@ -62,15 +62,10 @@ fn main() {
     // Step 3: pool. Use exact offsets when the tokenizer provides them.
     // `pool` is available as a fallback when only document length is known.
     let pooler = LateChunkingPooler::new(dim);
-    let chunk_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &chunks);
+    let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
 
-    for (chunk, emb) in chunks.iter().zip(&chunk_embeddings) {
-        println!(
-            "chunk {} [{:?}]: {:?}",
-            chunk.index,
-            chunk.span(),
-            chunk.text
-        );
+    for (span, emb) in spans.iter().zip(&span_embeddings) {
+        println!("span {} [{:?}]: {:?}", span.index, span.span(), span.text);
         println!("  pooled [einstein, pronoun, theory, physics]: {emb:.3?}\n");
     }
 }
