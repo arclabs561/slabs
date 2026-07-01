@@ -1,13 +1,8 @@
 //! Pool full-document token embeddings over externally chosen spans.
 //!
-//! In a real pipeline:
-//! 1. Choose boundaries with `text-splitter`, parser output, regex, or an extraction pipeline.
-//! 2. Store those boundaries as `Slab`s.
-//! 3. Embed the full document with a long-context model and keep token offsets.
-//! 4. Pool token embeddings inside each slab's byte span.
-//!
-//! Pool semantics preserve document-wide context for spans that contain
-//! pronouns, anaphora, or acronym references (Günther et al. 2024).
+//! Creates byte ranges with `text-splitter`, stores them as `Slab`s, then pools
+//! token vectors over exact tokenizer offsets. The token vectors are
+//! hand-written so the pooled dimensions are inspectable.
 //!
 //! Run with: `cargo run --example span_pooling`
 
@@ -18,8 +13,8 @@ fn main() {
     let document =
         "Einstein developed relativity. He became famous. The theory transformed physics.";
 
-    // Step 1: boundaries come from another tool. `slabs` records the spans;
-    // it does not decide where text should be split.
+    // Boundaries come from another tool. `slabs` records the spans; it does not
+    // decide where text should be split.
     let splitter = TextSplitter::new(32);
     let spans: Vec<Slab> = splitter
         .chunk_indices(document)
@@ -29,9 +24,8 @@ fn main() {
         })
         .collect();
 
-    // Step 2: in a real pipeline, run the document through a long-context embedder
-    // and capture token-level output plus tokenizer offsets. Here we use small,
-    // interpretable vectors. Dimensions are:
+    // In a real pipeline, these come from a tokenizer and a long-context
+    // embedder. Dimensions are:
     // [Einstein/relativity context, pronoun/anaphora, theory reference, physics].
     let dim = 4;
     let token_offsets = vec![
@@ -59,8 +53,8 @@ fn main() {
         vec![0.25, 0.00, 0.40, 1.00], // physics
     ];
 
-    // Step 3: pool. Use exact offsets when the tokenizer provides them.
-    // `pool` is available as a fallback when only document length is known.
+    // Use exact offsets when the tokenizer provides them. `pool` is available
+    // as a fallback when only document length is known.
     let pooler = SpanPooler::new(dim);
     let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
 
