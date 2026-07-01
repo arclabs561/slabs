@@ -9,9 +9,9 @@
 //! Pool semantics preserve document-wide context for spans that contain
 //! pronouns, anaphora, or acronym references (Günther et al. 2024).
 //!
-//! Run with: `cargo run --example late_chunking`
+//! Run with: `cargo run --example span_pooling`
 
-use slabs::{LateChunkingPooler, Slab};
+use slabs::{Slab, SpanPooler};
 use text_splitter::TextSplitter;
 
 fn main() {
@@ -61,7 +61,7 @@ fn main() {
 
     // Step 3: pool. Use exact offsets when the tokenizer provides them.
     // `pool` is available as a fallback when only document length is known.
-    let pooler = LateChunkingPooler::new(dim);
+    let pooler = SpanPooler::new(dim);
     let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
 
     for (span, emb) in spans.iter().zip(&span_embeddings) {

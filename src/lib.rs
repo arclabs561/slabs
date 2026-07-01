@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! # slabs
 //!
-//! Retrieval spans and late pooling.
+//! Retrieval spans and exact span pooling.
 //!
 //! `slabs` centers the [`Slab`] type: a text span with byte and character
 //! offsets in the exact source string used to create it. Use slabs between
@@ -18,21 +18,21 @@
 //! otherwise transformed before slab construction, the offsets refer to that
 //! transformed string, not to an earlier document representation.
 //!
-//! ### `LateChunkingPooler`: pool token embeddings into span embeddings
+//! ### `SpanPooler`: pool token embeddings into span embeddings
 //!
 //! Late chunking (Günther et al. 2024, arXiv:2409.04701) embeds the full
 //! document first so every token attends to the rest of the document,
 //! then mean-pools token embeddings inside each slab's span and L2-normalizes
 //! the result. The output is a fixed-width vector for each slab.
 //!
-//! `LateChunkingPooler` is span-only: bring your own boundaries from any
+//! [`SpanPooler`] is span-only: bring your own boundaries from any
 //! source: `text-splitter`, parser output, regex, or hand-built `Slab`s.
 //!
 //! ## Scope
 //!
 //! - Boundary finding is upstream.
 //! - Format conversion is upstream; input is already `&str`.
-//! - Embedding generation is upstream; [`LateChunkingPooler`] consumes token
+//! - Embedding generation is upstream; [`SpanPooler`] consumes token
 //!   vectors.
 //! - Storage is downstream; enable the `serde` feature when spans need to cross
 //!   a storage or service boundary.
@@ -47,10 +47,10 @@
 //!     .with_char_offsets(0, 24);
 //! ```
 //!
-//! ## Quick start (late pooling)
+//! ## Quick start (span pooling)
 //!
 //! ```ignore
-//! use slabs::{LateChunkingPooler, Slab};
+//! use slabs::{Slab, SpanPooler};
 //!
 //! // Bring your own spans (text-splitter, deformat, anno, parser output, ...).
 //! let spans: Vec<Slab> = boundary_source(&document);
@@ -59,8 +59,8 @@
 //! let token_embeddings: Vec<Vec<f32>> = my_model.embed_tokens(&document);
 //!
 //! // Pool token embeddings into per-span embeddings.
-//! let pooler = LateChunkingPooler::new(384);
-//! let span_embeddings = pooler.pool(&token_embeddings, &spans, document.len());
+//! let pooler = SpanPooler::new(384);
+//! let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
 //! ```
 
 mod error;
@@ -68,7 +68,9 @@ mod late;
 mod slab;
 
 pub use error::{Error, Result};
+#[allow(deprecated)]
 pub use late::LateChunkingPooler;
+pub use late::SpanPooler;
 pub use slab::{compute_char_offsets, slabs_from_byte_ranges, slabs_from_char_ranges, Slab};
 
 /// A source of already-chosen [`Slab`] boundaries.
@@ -109,7 +111,7 @@ pub trait SlabSource: Send + Sync {
 ///
 /// Slabs does not ship boundary finders. The trait is public so users can
 /// wrap external chunkers (`text-splitter`, regex, parser output, custom
-/// logic) and feed the output into [`LateChunkingPooler`].
+/// logic) and feed the output into [`SpanPooler`].
 ///
 /// Prefer [`SlabSource`] for new adapters. `Chunker` remains available for
 /// existing code that already uses chunking vocabulary at the boundary source.

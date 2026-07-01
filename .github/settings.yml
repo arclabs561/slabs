@@ -3,7 +3,7 @@
 
 repository:
   name: slabs
-  description: "Retrieval spans and late pooling"
+  description: "Retrieval spans and exact span pooling"
   homepage: "https://docs.rs/slabs"
   private: false
   has_issues: true
@@ -20,5 +20,5 @@ repository:
     - retrieval
     - rag
     - rust
-    - late-chunking
+    - span-pooling
     - embeddings

@@ -2,7 +2,7 @@
 //!
 //! `slabs` owns two pieces of pooling logic worth pinning exactly:
 //!
-//! 1. `LateChunkingPooler::pool` maps a slab's byte span `[start, end)` to the
+//! 1. `SpanPooler::pool` maps a slab's byte span `[start, end)` to the
 //!    half-open token-index range
 //!    `[floor(start / doc_len * n_tokens), floor(end / doc_len * n_tokens))`,
 //!    mean-pools those token vectors, and L2-normalizes the result. The mapping
@@ -13,7 +13,7 @@
 //!
 //! Vectors are chosen so the mean and the L2 norm have closed forms.
 
-use slabs::{LateChunkingPooler, Slab};
+use slabs::{Slab, SpanPooler};
 
 const SQRT_HALF: f32 = std::f32::consts::FRAC_1_SQRT_2; // 1 / sqrt(2)
 
@@ -36,7 +36,7 @@ fn assert_vec_close(got: &[f32], want: &[f32]) {
 /// `[1/sqrt(2), 1/sqrt(2)]`.
 #[test]
 fn pool_floors_byte_to_token_mapping() {
-    let pooler = LateChunkingPooler::new(2);
+    let pooler = SpanPooler::new(2);
     let token_embeddings = vec![
         vec![1.0, 0.0], // t0
         vec![1.0, 0.0], // t1  <- selected
@@ -59,7 +59,7 @@ fn pool_floors_byte_to_token_mapping() {
 /// partition the four tokens into disjoint halves with no overlap.
 #[test]
 fn pool_partitions_tokens_at_one_to_one_scale() {
-    let pooler = LateChunkingPooler::new(2);
+    let pooler = SpanPooler::new(2);
     let token_embeddings = vec![
         vec![1.0, 0.0], // t0
         vec![1.0, 0.0], // t1
@@ -83,7 +83,7 @@ fn pool_partitions_tokens_at_one_to_one_scale() {
 /// exactly at 6 (no overlap). The middle token is `[0, 2]`, normalized `[0, 1]`.
 #[test]
 fn pool_with_offsets_excludes_boundary_touching_tokens() {
-    let pooler = LateChunkingPooler::new(2);
+    let pooler = SpanPooler::new(2);
     let token_embeddings = vec![vec![2.0, 0.0], vec![0.0, 2.0], vec![2.0, 2.0]];
     let token_offsets = vec![(0, 3), (3, 6), (6, 9)];
     let slab = Slab::new("mid", 3, 6, 0);
@@ -100,7 +100,7 @@ fn pool_with_offsets_excludes_boundary_touching_tokens() {
 /// mean is `[1, 1]`, normalized to `[1/sqrt(2), 1/sqrt(2)]`.
 #[test]
 fn pool_with_offsets_averages_overlapping_tokens() {
-    let pooler = LateChunkingPooler::new(2);
+    let pooler = SpanPooler::new(2);
     let token_embeddings = vec![vec![2.0, 0.0], vec![0.0, 2.0], vec![2.0, 2.0]];
     let token_offsets = vec![(0, 3), (3, 6), (6, 9)];
     let slab = Slab::new("two", 2, 6, 0);

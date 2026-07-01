@@ -1,6 +1,6 @@
 # Contributing to slabs
 
-Thanks for your interest. slabs is aST-aware code chunking and late chunking for RAG.
+Thanks for your interest. slabs is retrieval spans and exact span pooling.
 
 ## Before you start
 

@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `SpanPooler` as the primary name for pooling token embeddings over `Slab`
+  spans.
+- `span_pooling` example showing the current span-pooling boundary.
+
+### Deprecated
+
+- `LateChunkingPooler`; use `SpanPooler` for new code.
+
+### Changed
+
+- Renamed the example formerly documented as `late_chunking` to
+  `span_pooling`.
+
 ## [0.3.0] - 2026-06-20
 
 ### Added

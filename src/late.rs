@@ -1,4 +1,4 @@
-//! Late chunking: embed first, then pool spans.
+//! Span pooling for full-document token embeddings.
 //!
 //! ## Independent chunk embedding
 //!
@@ -14,10 +14,10 @@
 //!
 //! The second chunk embeds "He" without knowing it refers to Einstein.
 //!
-//! ## Late pooling
+//! ## Span pooling
 //!
 //! Late chunking (Günther et al. 2024) embeds the full document first,
-//! then pools token embeddings for each span:
+//! then pools token embeddings for each selected span:
 //!
 //! ```text
 //! Document: "Einstein developed relativity. He became famous."
@@ -50,7 +50,7 @@
 //!
 //! ## Trade-offs
 //!
-//! | Aspect | Independent chunk embedding | Late pooling |
+//! | Aspect | Independent chunk embedding | Span pooling |
 //! |--------|-------------|---------------|
 //! | Memory | O(chunk_size) | O(doc_length × dim) |
 //! | Context | Local only | Full document |
@@ -63,18 +63,29 @@
 
 use crate::Slab;
 
-/// Late chunking pooler: pools token embeddings into span embeddings.
+/// Pools token embeddings into span embeddings.
 ///
 /// Given token-level embeddings from a full document, it pools the tokens
 /// within each [`Slab`] boundary and returns one L2-normalized vector per slab.
 #[derive(Debug, Clone)]
-pub struct LateChunkingPooler {
+pub struct SpanPooler {
     /// Output dimension and expected token embedding dimension.
     dim: usize,
 }
 
-impl LateChunkingPooler {
-    /// Create a new late chunking pooler.
+/// Compatibility alias for the old pooler name.
+///
+/// Use [`SpanPooler`] in new code. The old name remains available because
+/// existing callers may still use late-chunking vocabulary for the full
+/// pipeline. This crate only owns the span-pooling primitive.
+#[deprecated(
+    since = "0.4.0",
+    note = "use SpanPooler; slabs owns span pooling, not the full late-chunking pipeline"
+)]
+pub type LateChunkingPooler = SpanPooler;
+
+impl SpanPooler {
+    /// Create a new span pooler.
     ///
     /// # Arguments
     ///
@@ -83,14 +94,14 @@ impl LateChunkingPooler {
         Self { dim }
     }
 
-    /// Pool token embeddings into slab embeddings.
+    /// Pool token embeddings into slab embeddings by approximate position.
     ///
     /// # Arguments
     ///
-    /// * `token_embeddings` - Token-level embeddings from full document.
+    /// * `token_embeddings` - Token-level embeddings from the full document.
     ///   Shape: [n_tokens, dim]. Each token has "seen" the full document.
-    /// * `chunks` - span boundaries from any source.
-    /// * `doc_len` - Total document length in bytes (for mapping).
+    /// * `chunks` - Span boundaries from any source.
+    /// * `doc_len` - Total document length in bytes.
     ///
     /// # Returns
     ///
@@ -102,6 +113,13 @@ impl LateChunkingPooler {
     /// Token vectors are expected to have `dim` components. Debug builds assert
     /// that contract. Release builds use the first `dim` components and treat
     /// missing components as zero.
+    ///
+    /// # Precision
+    ///
+    /// This method linearly maps byte offsets to token indices. Prefer
+    /// [`pool_with_offsets`](SpanPooler::pool_with_offsets) or
+    /// [`pool_with_char_offsets`](SpanPooler::pool_with_char_offsets) when a
+    /// tokenizer reports exact offsets.
     pub fn pool(
         &self,
         token_embeddings: &[Vec<f32>],
@@ -305,8 +323,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_late_chunking_pooler_basic() {
-        let pooler = LateChunkingPooler::new(4);
+    fn span_pooler_basic() {
+        let pooler = SpanPooler::new(4);
 
         // Simulate 6 tokens, 4-dim embeddings
         let token_embeddings = vec![
@@ -336,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_pool_with_exact_offsets() {
-        let pooler = LateChunkingPooler::new(3);
+        let pooler = SpanPooler::new(3);
 
         // 5 tokens with known byte offsets
         let token_embeddings = vec![
@@ -369,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_empty_inputs() {
-        let pooler = LateChunkingPooler::new(4);
+        let pooler = SpanPooler::new(4);
 
         let result = pooler.pool(&[], &[], 0);
         assert!(result.is_empty());
@@ -383,7 +401,7 @@ mod tests {
 
     #[test]
     fn pool_uses_configured_output_dimension() {
-        let pooler = LateChunkingPooler::new(3);
+        let pooler = SpanPooler::new(3);
         let chunks = vec![Slab::new("abc", 0, 3, 0)];
         let token_embeddings = vec![vec![2.0, 0.0, 0.0], vec![0.0, 2.0, 0.0]];
 
@@ -397,7 +415,7 @@ mod tests {
 
     #[test]
     fn pool_with_offsets_uses_configured_output_dimension() {
-        let pooler = LateChunkingPooler::new(3);
+        let pooler = SpanPooler::new(3);
         let chunks = vec![Slab::new("abc", 0, 3, 0)];
         let token_embeddings = vec![vec![2.0, 0.0, 0.0]];
         let token_offsets = vec![(0, 3)];
@@ -410,7 +428,7 @@ mod tests {
 
     #[test]
     fn pool_with_offsets_uses_byte_spans() {
-        let pooler = LateChunkingPooler::new(2);
+        let pooler = SpanPooler::new(2);
         let text = "éclair cake";
         let chunks = vec![Slab::from_byte_range(text, 0..7, 0).unwrap()];
         let token_embeddings = vec![vec![2.0, 0.0], vec![0.0, 2.0]];
@@ -423,7 +441,7 @@ mod tests {
 
     #[test]
     fn pool_with_char_offsets_uses_character_spans() {
-        let pooler = LateChunkingPooler::new(2);
+        let pooler = SpanPooler::new(2);
         let text = "éclair cake";
         let chunks = vec![Slab::from_char_range(text, 0..6, 0).unwrap()];
         let token_embeddings = vec![vec![2.0, 0.0], vec![0.0, 2.0]];
