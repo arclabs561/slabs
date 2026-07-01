@@ -1,6 +1,6 @@
 //! Error types for slabs.
 
-/// Errors that can occur during chunking.
+/// Errors that can occur during slab construction or adapter code.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// A byte span was outside the source text or had `start > end`.
@@ -32,7 +32,8 @@ pub enum Error {
         offset: usize,
     },
 
-    /// Embedding model error.
+    /// Compatibility error for adapters that map upstream embedding failures
+    /// into `slabs::Error`.
     #[error("embedding error: {0}")]
     Embedding(String),
 }

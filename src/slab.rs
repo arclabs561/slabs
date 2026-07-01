@@ -226,6 +226,10 @@ fn char_to_byte_offset(source: &str, char_offset: usize) -> usize {
 /// then fills `char_start`/`char_end` on each slab. This is faster than
 /// per-slab computation when there are many slabs.
 ///
+/// Each slab must use byte offsets into the exact `text` argument, and each
+/// offset must be a UTF-8 character boundary. Use [`Slab::from_byte_range`] or
+/// [`slabs_from_byte_ranges`] when you need validation.
+///
 /// # Example
 ///
 /// ```rust

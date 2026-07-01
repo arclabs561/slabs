@@ -85,6 +85,9 @@ pub trait SlabSource: Send + Sync {
     /// Implementors override this method. Users should call
     /// [`slabs`](SlabSource::slabs) instead, which adds character offsets
     /// automatically.
+    ///
+    /// Returned slabs must use byte offsets into the exact `text` argument,
+    /// and those offsets must be valid UTF-8 character boundaries.
     fn slab_bytes(&self, text: &str) -> Vec<Slab>;
 
     /// Return slabs with both byte and character offsets.
@@ -120,6 +123,9 @@ pub trait Chunker: Send + Sync {
     ///
     /// Implementors override this method. Users should call [`chunk`](Chunker::chunk)
     /// instead, which adds character offsets automatically.
+    ///
+    /// Returned slabs must use byte offsets into the exact `text` argument,
+    /// and those offsets must be valid UTF-8 character boundaries.
     fn chunk_bytes(&self, text: &str) -> Vec<Slab>;
 
     /// Split text into chunks with both byte and character offsets.
