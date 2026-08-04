@@ -17,8 +17,13 @@ repository:
 
   topics:
     - chunking
-    - retrieval
-    - rag
-    - rust
-    - span-pooling
     - embeddings
+    - nlp
+    - rag
+    - retrieval
+    - rust
+    - segmentation
+    - span-pooling
+    - text-processing
+    - text-segmentation
+    - texttiling
