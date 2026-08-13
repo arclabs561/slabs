@@ -65,7 +65,7 @@ use std::ops::Range;
 
 use crate::Slab;
 
-/// Invalid input to exact span pooling.
+/// Invalid input to validated offset-aware span pooling.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum PoolingError {
@@ -217,7 +217,7 @@ impl SpanPooler {
             .collect()
     }
 
-    /// Pool with exact token byte offsets.
+    /// Pool using token byte offsets.
     ///
     /// Use this when you have exact token offsets from the tokenizer,
     /// rather than relying on linear approximation.
@@ -245,7 +245,7 @@ impl SpanPooler {
             })
     }
 
-    /// Pool with exact token byte offsets, validating every input contract.
+    /// Pool using token byte offsets, validating every input contract.
     ///
     /// Non-empty token offsets must be non-overlapping and ordered. Empty
     /// offsets are ignored, as tokenizers commonly use them for special tokens.
@@ -267,7 +267,7 @@ impl SpanPooler {
         })
     }
 
-    /// Pool with exact token character offsets.
+    /// Pool using token character offsets.
     ///
     /// Use this when a tokenizer reports character offsets instead of byte
     /// offsets. Each `Slab` should have `char_start` and `char_end` populated,
@@ -294,7 +294,7 @@ impl SpanPooler {
             })
     }
 
-    /// Pool with exact token character offsets, validating every input contract.
+    /// Pool using token character offsets, validating every input contract.
     ///
     /// Non-empty token offsets must be non-overlapping and ordered. Empty
     /// offsets are ignored, as tokenizers commonly use them for special tokens.

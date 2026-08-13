@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! # slabs
 //!
-//! Retrieval spans and exact span pooling.
+//! Retrieval spans and offset-aware token pooling.
 //!
 //! `slabs` centers the [`Slab`] type: a text span with byte and character
 //! offsets in the exact source string used to create it. Use slabs between

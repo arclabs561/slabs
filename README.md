@@ -4,7 +4,7 @@
 [![Documentation](https://docs.rs/slabs/badge.svg)](https://docs.rs/slabs)
 [![CI](https://github.com/arclabs561/slabs/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/slabs/actions/workflows/ci.yml)
 
-Retrieval spans and exact span pooling.
+Retrieval spans and offset-aware token pooling.
 
 `slabs` provides `Slab`, a text span with byte and character offsets, plus
 utilities for pooling token embeddings over those spans. Use it between
@@ -72,10 +72,12 @@ let pooler = SpanPooler::new(384);
 let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
 ```
 
-Use `pool_with_offsets` when your tokenizer exposes exact byte offsets. Use
-`pool_with_char_offsets` when it exposes character offsets and your `Slab`s
-have `char_start`/`char_end`. Use `pool` only as an approximation when you
-have token embeddings and document length but no offsets.
+Use `try_pool_with_offsets` when your tokenizer exposes byte offsets, or
+`try_pool_with_char_offsets` for character offsets. These methods include each
+whole token whose offset overlaps the slab; they do not weight partial boundary
+overlap. The corresponding methods without `try_` preserve legacy behavior by
+falling back on invalid input. Use `pool` only as a positional approximation
+when you have token embeddings and document length but no offsets.
 
 Each returned vector is the L2-normalized mean of the token vectors overlapping
 the slab. Span pooling requires holding full-document token embeddings in memory

@@ -3,7 +3,7 @@
 
 repository:
   name: slabs
-  description: "Retrieval spans and exact span pooling"
+  description: "Retrieval spans and offset-aware token pooling"
   homepage: "https://docs.rs/slabs"
   private: false
   has_issues: true
