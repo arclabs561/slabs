@@ -61,7 +61,74 @@
 //! Günther, Billerbeck, et al. (2024). "Late Chunking: Contextual Chunk
 //! Embeddings Using Long-Context Embedding Models." arXiv:2409.04701.
 
+use std::ops::Range;
+
 use crate::Slab;
+
+/// Invalid input to exact span pooling.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum PoolingError {
+    /// The number of token embeddings did not match the number of token spans.
+    #[error("token embedding count {embeddings} does not match token offset count {offsets}")]
+    TokenCountMismatch {
+        /// Number of token embedding vectors.
+        embeddings: usize,
+        /// Number of token offset pairs.
+        offsets: usize,
+    },
+    /// A token embedding had a different dimension than the pooler.
+    #[error("token embedding {token} has dimension {actual}; expected {expected}")]
+    EmbeddingDimension {
+        /// Index of the malformed token embedding.
+        token: usize,
+        /// Configured embedding dimension.
+        expected: usize,
+        /// Actual embedding dimension.
+        actual: usize,
+    },
+    /// The pooler was configured with a zero-dimensional output.
+    #[error("pooling dimension must be greater than zero")]
+    ZeroDimension,
+    /// A non-empty token offset was reversed, overlapping, or out of order.
+    #[error("invalid token offset at index {token}: {start}..{end}")]
+    InvalidTokenOffset {
+        /// Index of the malformed token offset.
+        token: usize,
+        /// Start offset.
+        start: usize,
+        /// End offset.
+        end: usize,
+    },
+    /// Slabs were not ordered by their selected coordinate.
+    #[error("slab at index {slab} starts before the preceding slab")]
+    UnsortedSlabs {
+        /// Index of the first out-of-order slab.
+        slab: usize,
+    },
+    /// A slab span was empty or reversed.
+    #[error("invalid slab span at index {slab}: {start}..{end}")]
+    InvalidSlabSpan {
+        /// Index of the malformed slab.
+        slab: usize,
+        /// Start offset in the selected coordinate.
+        start: usize,
+        /// End offset in the selected coordinate.
+        end: usize,
+    },
+    /// Character pooling requires character offsets on every slab.
+    #[error("slab at index {slab} has no character offsets")]
+    MissingCharacterOffsets {
+        /// Index of the slab without character offsets.
+        slab: usize,
+    },
+    /// No token overlaps a slab.
+    #[error("no token overlaps slab at index {slab}")]
+    NoTokenOverlap {
+        /// Index of the slab without a token.
+        slab: usize,
+    },
+}
 
 /// Pools token embeddings into span embeddings.
 ///
@@ -160,42 +227,44 @@ impl SpanPooler {
     /// * `token_embeddings` - Token-level embeddings [n_tokens, dim].
     /// * `token_offsets` - Byte offset for each token [(start, end), ...].
     /// * `chunks` - span boundaries.
+    ///
+    /// Invalid input retains the legacy permissive behavior for compatibility.
+    /// Prefer [`try_pool_with_offsets`](Self::try_pool_with_offsets) when input
+    /// errors must not be hidden.
     pub fn pool_with_offsets(
         &self,
         token_embeddings: &[Vec<f32>],
         token_offsets: &[(usize, usize)],
         chunks: &[Slab],
     ) -> Vec<Vec<f32>> {
-        if token_embeddings.is_empty() || chunks.is_empty() {
-            return vec![vec![0.0; self.dim]; chunks.len()];
-        }
-
-        chunks
-            .iter()
-            .map(|chunk| {
-                // Find tokens that overlap with this slab.
-                let token_indices: Vec<usize> = token_offsets
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, (start, end))| {
-                        // Token overlaps with slab.
-                        *start < chunk.end && *end > chunk.start
-                    })
-                    .map(|(i, _)| i)
-                    .collect();
-
-                if token_indices.is_empty() {
-                    return self.mean_pool(token_embeddings);
-                }
-
-                let selected: Vec<&[f32]> = token_indices
-                    .iter()
-                    .filter_map(|&i| token_embeddings.get(i).map(Vec::as_slice))
-                    .collect();
-
-                self.mean_pool_refs(&selected)
+        self.try_pool_with_offsets(token_embeddings, token_offsets, chunks)
+            .unwrap_or_else(|_| {
+                self.compatibility_pool_exact(token_embeddings, token_offsets, chunks, |chunk| {
+                    Some(chunk.start..chunk.end)
+                })
             })
-            .collect()
+    }
+
+    /// Pool with exact token byte offsets, validating every input contract.
+    ///
+    /// Non-empty token offsets must be non-overlapping and ordered. Empty
+    /// offsets are ignored, as tokenizers commonly use them for special tokens.
+    /// Slabs may overlap, but must be ordered by byte start. Every slab must
+    /// overlap at least one token.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for count or dimension mismatches, malformed ordering,
+    /// invalid half-open token spans, or a slab with no overlapping token.
+    pub fn try_pool_with_offsets(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        token_offsets: &[(usize, usize)],
+        chunks: &[Slab],
+    ) -> std::result::Result<Vec<Vec<f32>>, PoolingError> {
+        self.try_pool_exact(token_embeddings, token_offsets, chunks, |chunk| {
+            Some(chunk.start..chunk.end)
+        })
     }
 
     /// Pool with exact token character offsets.
@@ -205,83 +274,212 @@ impl SpanPooler {
     /// for example by [`Slab::from_char_range`](crate::Slab::from_char_range)
     /// or [`crate::compute_char_offsets`]. A slab without character offsets
     /// falls back to the full-document average.
+    /// Other invalid input retains the legacy permissive behavior. Prefer
+    /// [`try_pool_with_char_offsets`](Self::try_pool_with_char_offsets) when
+    /// input errors must not be hidden.
     pub fn pool_with_char_offsets(
         &self,
         token_embeddings: &[Vec<f32>],
         token_offsets: &[(usize, usize)],
         chunks: &[Slab],
     ) -> Vec<Vec<f32>> {
-        if token_embeddings.is_empty() || chunks.is_empty() {
-            return vec![vec![0.0; self.dim]; chunks.len()];
+        self.try_pool_with_char_offsets(token_embeddings, token_offsets, chunks)
+            .unwrap_or_else(|_| {
+                self.compatibility_pool_exact(
+                    token_embeddings,
+                    token_offsets,
+                    chunks,
+                    Slab::char_span,
+                )
+            })
+    }
+
+    /// Pool with exact token character offsets, validating every input contract.
+    ///
+    /// Non-empty token offsets must be non-overlapping and ordered. Empty
+    /// offsets are ignored, as tokenizers commonly use them for special tokens.
+    /// Slabs may overlap, but must have character offsets and be ordered by
+    /// character start. Every slab must overlap at least one token.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for count or dimension mismatches, malformed ordering,
+    /// missing character offsets, invalid half-open token spans, or a slab with
+    /// no overlapping token.
+    pub fn try_pool_with_char_offsets(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        token_offsets: &[(usize, usize)],
+        chunks: &[Slab],
+    ) -> std::result::Result<Vec<Vec<f32>>, PoolingError> {
+        self.try_pool_exact(token_embeddings, token_offsets, chunks, Slab::char_span)
+    }
+
+    fn try_pool_exact<F>(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        token_offsets: &[(usize, usize)],
+        chunks: &[Slab],
+        span_of: F,
+    ) -> std::result::Result<Vec<Vec<f32>>, PoolingError>
+    where
+        F: Fn(&Slab) -> Option<Range<usize>>,
+    {
+        self.validate_tokens(token_embeddings, token_offsets)?;
+        if chunks.is_empty() {
+            return Ok(Vec::new());
         }
 
+        let mut spans = Vec::with_capacity(chunks.len());
+        let mut previous_start = None;
+        for (slab, chunk) in chunks.iter().enumerate() {
+            let span = span_of(chunk).ok_or(PoolingError::MissingCharacterOffsets { slab })?;
+            if span.start >= span.end {
+                return Err(PoolingError::InvalidSlabSpan {
+                    slab,
+                    start: span.start,
+                    end: span.end,
+                });
+            }
+            if previous_start.is_some_and(|start| span.start < start) {
+                return Err(PoolingError::UnsortedSlabs { slab });
+            }
+            previous_start = Some(span.start);
+            spans.push(span);
+        }
+
+        let mut first_candidate = 0usize;
+        let mut pooled = Vec::with_capacity(spans.len());
+        for (slab, span) in spans.into_iter().enumerate() {
+            while first_candidate < token_offsets.len()
+                && token_offsets[first_candidate].1 <= span.start
+            {
+                first_candidate += 1;
+            }
+
+            let mut sum = vec![0.0; self.dim];
+            let mut count = 0usize;
+            for (offset, embedding) in token_offsets[first_candidate..]
+                .iter()
+                .zip(&token_embeddings[first_candidate..])
+            {
+                if offset.0 == offset.1 {
+                    continue;
+                }
+                if offset.0 >= span.end {
+                    break;
+                }
+                if offset.1 > span.start {
+                    for (total, value) in sum.iter_mut().zip(embedding) {
+                        *total += value;
+                    }
+                    count += 1;
+                }
+            }
+            if count == 0 {
+                return Err(PoolingError::NoTokenOverlap { slab });
+            }
+            Self::normalize_mean(&mut sum, count);
+            pooled.push(sum);
+        }
+        Ok(pooled)
+    }
+
+    fn validate_tokens(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        token_offsets: &[(usize, usize)],
+    ) -> std::result::Result<(), PoolingError> {
+        if self.dim == 0 {
+            return Err(PoolingError::ZeroDimension);
+        }
+        if token_embeddings.len() != token_offsets.len() {
+            return Err(PoolingError::TokenCountMismatch {
+                embeddings: token_embeddings.len(),
+                offsets: token_offsets.len(),
+            });
+        }
+        let mut previous_end = 0usize;
+        for (token, ((start, end), embedding)) in
+            token_offsets.iter().zip(token_embeddings).enumerate()
+        {
+            if start > end || (start != end && *start < previous_end) {
+                return Err(PoolingError::InvalidTokenOffset {
+                    token,
+                    start: *start,
+                    end: *end,
+                });
+            }
+            if embedding.len() != self.dim {
+                return Err(PoolingError::EmbeddingDimension {
+                    token,
+                    expected: self.dim,
+                    actual: embedding.len(),
+                });
+            }
+            if start != end {
+                previous_end = *end;
+            }
+        }
+        Ok(())
+    }
+
+    fn compatibility_pool_exact<F>(
+        &self,
+        token_embeddings: &[Vec<f32>],
+        token_offsets: &[(usize, usize)],
+        chunks: &[Slab],
+        span_of: F,
+    ) -> Vec<Vec<f32>>
+    where
+        F: Fn(&Slab) -> Option<Range<usize>>,
+    {
         chunks
             .iter()
             .map(|chunk| {
-                let Some(span) = chunk.char_span() else {
+                let Some(span) = span_of(chunk) else {
                     return self.mean_pool(token_embeddings);
                 };
-
-                let token_indices: Vec<usize> = token_offsets
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, (start, end))| *start < span.end && *end > span.start)
-                    .map(|(i, _)| i)
-                    .collect();
-
-                if token_indices.is_empty() {
+                let mut sum = vec![0.0; self.dim];
+                let mut count = 0usize;
+                let mut overlaps = false;
+                for (token, offset) in token_offsets.iter().enumerate() {
+                    if offset.0 < span.end && offset.1 > span.start {
+                        overlaps = true;
+                        if let Some(embedding) = token_embeddings.get(token) {
+                            debug_assert_eq!(embedding.len(), self.dim);
+                            for (total, value) in sum.iter_mut().zip(embedding) {
+                                *total += value;
+                            }
+                            count += 1;
+                        }
+                    }
+                }
+                if !overlaps {
                     return self.mean_pool(token_embeddings);
                 }
-
-                let selected: Vec<&[f32]> = token_indices
-                    .iter()
-                    .filter_map(|&i| token_embeddings.get(i).map(Vec::as_slice))
-                    .collect();
-
-                self.mean_pool_refs(&selected)
+                if count > 0 {
+                    Self::normalize_mean(&mut sum, count);
+                }
+                sum
             })
             .collect()
     }
 
-    /// Mean pool a slice of token embeddings.
-    fn mean_pool(&self, embeddings: &[Vec<f32>]) -> Vec<f32> {
-        if embeddings.is_empty() {
-            return vec![0.0; self.dim];
+    fn normalize_mean(result: &mut [f32], count: usize) {
+        for value in result.iter_mut() {
+            *value /= count as f32;
         }
-
-        let mut result = vec![0.0; self.dim];
-        let count = embeddings.len() as f32;
-
-        for emb in embeddings {
-            debug_assert_eq!(
-                emb.len(),
-                self.dim,
-                "token embedding dimension mismatch: expected {}, got {}",
-                self.dim,
-                emb.len()
-            );
-            for (i, &v) in emb.iter().take(self.dim).enumerate() {
-                result[i] += v;
-            }
-        }
-
-        for v in &mut result {
-            *v /= count;
-        }
-
-        // L2 normalize.
-        let norm: f32 = result.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm = result.iter().map(|value| value * value).sum::<f32>().sqrt();
         if norm > 1e-9 {
-            for v in &mut result {
-                *v /= norm;
+            for value in result {
+                *value /= norm;
             }
         }
-
-        result
     }
 
-    /// Mean pool from references.
-    fn mean_pool_refs(&self, embeddings: &[&[f32]]) -> Vec<f32> {
+    /// Mean pool a slice of token embeddings.
+    fn mean_pool(&self, embeddings: &[Vec<f32>]) -> Vec<f32> {
         if embeddings.is_empty() {
             return vec![0.0; self.dim];
         }

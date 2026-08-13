@@ -70,7 +70,7 @@ mod slab;
 pub use error::{Error, Result};
 #[allow(deprecated)]
 pub use late::LateChunkingPooler;
-pub use late::SpanPooler;
+pub use late::{PoolingError, SpanPooler};
 pub use slab::{compute_char_offsets, slabs_from_byte_ranges, slabs_from_char_ranges, Slab};
 
 /// A source of already-chosen [`Slab`] boundaries.
