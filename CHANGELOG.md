@@ -4,8 +4,12 @@ All notable changes to this project are documented here. Format based on [Keep a
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-12
+
 ### Added
 
+- `PoolingError`, `try_pool_with_offsets`, and `try_pool_with_char_offsets`
+  report invalid embedding, offset, and span contracts.
 - `SpanPooler` as the primary name for pooling token embeddings over `Slab`
   spans.
 - `span_pooling` example showing the current span-pooling boundary.
@@ -72,6 +76,8 @@ All notable changes to this project are documented here. Format based on [Keep a
 
 - Dead `CodeChunkerError` variants and unused exports.
 
+[Unreleased]: https://github.com/arclabs561/slabs/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/arclabs561/slabs/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arclabs561/slabs/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arclabs561/slabs/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/arclabs561/slabs/releases/tag/v0.1.4

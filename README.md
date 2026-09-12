@@ -20,7 +20,7 @@ Dual-licensed under MIT or Apache-2.0.
 
 ```toml
 [dependencies]
-slabs = "0.3"
+slabs = "0.4"
 ```
 
 Features:
@@ -69,18 +69,18 @@ let token_embeddings: Vec<Vec<f32>> = embed_full_document_tokens(&document);
 let token_offsets: Vec<(usize, usize)> = tokenizer_offsets(&document);
 
 let pooler = SpanPooler::new(384);
-let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
+let span_embeddings =
+    pooler.try_pool_with_offsets(&token_embeddings, &token_offsets, &spans)?;
 ```
 
-The published 0.3 release provides `pool_with_offsets` for byte offsets and
-`pool_with_char_offsets` for character offsets. Their checked counterparts,
-`try_pool_with_offsets` and `try_pool_with_char_offsets`, are currently
-unreleased on `main` and will not be available to registry users until the next
-release; use them when input errors must not be hidden. These methods include
-each whole token whose offset overlaps the slab; they do not weight partial
-boundary overlap. The published methods preserve legacy behavior by falling
-back on invalid input. Use `pool` only as a positional approximation when you
-have token embeddings and document length but no offsets.
+Use `try_pool_with_offsets` for byte offsets and `try_pool_with_char_offsets`
+for character offsets. These checked methods return `PoolingError` for invalid
+embedding, offset, or span contracts. `pool_with_offsets` and
+`pool_with_char_offsets` retain their legacy fallback behavior.
+
+These methods include each whole token whose offset overlaps the slab; they do
+not weight partial boundary overlap. Use `pool` only as a positional
+approximation when you have token embeddings and document length but no offsets.
 
 Each returned vector is the L2-normalized mean of the token vectors overlapping
 the slab. Span pooling requires holding full-document token embeddings in memory
