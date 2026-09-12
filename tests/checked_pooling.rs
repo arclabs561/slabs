@@ -103,6 +103,21 @@ fn checked_pooling_ignores_empty_special_token_offsets() {
 }
 
 #[test]
+fn checked_pooling_distinguishes_empty_batch_from_invalid_input() {
+    let pooler = SpanPooler::new(2);
+
+    let empty = pooler
+        .try_pool_with_offsets(&[], &[], &[])
+        .expect("an empty batch is valid");
+    assert!(empty.is_empty());
+
+    assert!(matches!(
+        pooler.try_pool_with_offsets(&[vec![1.0, 0.0]], &[], &[]),
+        Err(PoolingError::TokenCountMismatch { .. })
+    ));
+}
+
+#[test]
 fn checked_pooling_rejects_malformed_contracts() {
     let pooler = SpanPooler::new(2);
     let slab = Slab::new("a", 0, 1, 0);

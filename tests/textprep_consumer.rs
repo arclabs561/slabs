@@ -76,8 +76,9 @@ fn textprep_scalar_offsets_reconstruct_tokens_and_pool_exactly() {
             .expect("valid second slab"),
         ];
 
-        let actual =
-            SpanPooler::new(2).pool_with_char_offsets(&token_embeddings, &token_offsets, &slabs);
+        let actual = SpanPooler::new(2)
+            .try_pool_with_char_offsets(&token_embeddings, &token_offsets, &slabs)
+            .expect("textprep offsets satisfy the checked pooling contract");
         let expected: Vec<_> = slabs
             .iter()
             .map(|slab| naive_pool(&token_embeddings, &token_offsets, slab))

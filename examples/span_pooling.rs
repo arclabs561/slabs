@@ -9,7 +9,7 @@
 use slabs::{Slab, SpanPooler};
 use text_splitter::TextSplitter;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let document =
         "Einstein developed relativity. He became famous. The theory transformed physics.";
 
@@ -20,9 +20,9 @@ fn main() {
         .chunk_indices(document)
         .enumerate()
         .map(|(index, (start, chunk))| {
-            Slab::from_byte_range(document, start..start + chunk.len(), index).unwrap()
+            Slab::from_byte_range(document, start..start + chunk.len(), index)
         })
-        .collect();
+        .collect::<slabs::Result<_>>()?;
 
     // In a real pipeline, these come from a tokenizer and a long-context
     // embedder. Dimensions are:
@@ -56,10 +56,13 @@ fn main() {
     // Use exact offsets when the tokenizer provides them. `pool` is available
     // as a fallback when only document length is known.
     let pooler = SpanPooler::new(dim);
-    let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
+    let span_embeddings =
+        pooler.try_pool_with_offsets(&token_embeddings, &token_offsets, &spans)?;
 
     for (span, emb) in spans.iter().zip(&span_embeddings) {
         println!("span {} [{:?}]: {:?}", span.index, span.span(), span.text);
         println!("  pooled [einstein, pronoun, theory, physics]: {emb:.3?}\n");
     }
+
+    Ok(())
 }

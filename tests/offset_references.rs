@@ -5,7 +5,7 @@
 //! text matches the byte slice and the char offsets equal naive chars().count();
 //! from_char_range slices back to the same text and round-trips to bytes.
 
-use slabs::Slab;
+use slabs::{Error, Slab};
 
 const SOURCE: &str = "Hello, café! 日本語 test 🚀 rocket ☃ done. Ωmega résumé naïve.";
 
@@ -50,4 +50,29 @@ fn from_char_range_matches_naive_and_round_trips() {
             );
         }
     }
+}
+
+#[test]
+fn checked_construction_distinguishes_valid_empty_from_out_of_source_ranges() {
+    let byte_end = SOURCE.len();
+    let char_end = SOURCE.chars().count();
+
+    let empty_bytes =
+        Slab::from_byte_range(SOURCE, byte_end..byte_end, 0).expect("valid empty byte range");
+    assert!(empty_bytes.is_empty());
+    assert_eq!(empty_bytes.span(), byte_end..byte_end);
+
+    let empty_chars =
+        Slab::from_char_range(SOURCE, char_end..char_end, 0).expect("valid empty char range");
+    assert!(empty_chars.is_empty());
+    assert_eq!(empty_chars.char_span(), Some(char_end..char_end));
+
+    assert!(matches!(
+        Slab::from_byte_range("short", byte_end..byte_end, 0),
+        Err(Error::InvalidByteSpan { .. })
+    ));
+    assert!(matches!(
+        Slab::from_char_range("short", char_end..char_end, 0),
+        Err(Error::InvalidCharSpan { .. })
+    ));
 }

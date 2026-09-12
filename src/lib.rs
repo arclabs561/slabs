@@ -43,8 +43,8 @@
 //! ```ignore
 //! use slabs::Slab;
 //!
-//! let slab = Slab::new("Ada designed the engine.", 0, 24, 0)
-//!     .with_char_offsets(0, 24);
+//! let document = "Ada designed the engine.";
+//! let slab = Slab::from_byte_range(document, 0..24, 0)?;
 //! ```
 //!
 //! ## Quick start (span pooling)
@@ -60,7 +60,8 @@
 //!
 //! // Pool token embeddings into per-span embeddings.
 //! let pooler = SpanPooler::new(384);
-//! let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
+//! let span_embeddings =
+//!     pooler.try_pool_with_offsets(&token_embeddings, &token_offsets, &spans)?;
 //! ```
 
 mod error;

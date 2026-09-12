@@ -72,12 +72,15 @@ let pooler = SpanPooler::new(384);
 let span_embeddings = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &spans);
 ```
 
-Use `try_pool_with_offsets` when your tokenizer exposes byte offsets, or
-`try_pool_with_char_offsets` for character offsets. These methods include each
-whole token whose offset overlaps the slab; they do not weight partial boundary
-overlap. The corresponding methods without `try_` preserve legacy behavior by
-falling back on invalid input. Use `pool` only as a positional approximation
-when you have token embeddings and document length but no offsets.
+The published 0.3 release provides `pool_with_offsets` for byte offsets and
+`pool_with_char_offsets` for character offsets. Their checked counterparts,
+`try_pool_with_offsets` and `try_pool_with_char_offsets`, are currently
+unreleased on `main` and will not be available to registry users until the next
+release; use them when input errors must not be hidden. These methods include
+each whole token whose offset overlaps the slab; they do not weight partial
+boundary overlap. The published methods preserve legacy behavior by falling
+back on invalid input. Use `pool` only as a positional approximation when you
+have token embeddings and document length but no offsets.
 
 Each returned vector is the L2-normalized mean of the token vectors overlapping
 the slab. Span pooling requires holding full-document token embeddings in memory
