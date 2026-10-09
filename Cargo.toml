@@ -25,5 +25,5 @@ serde = ["dep:serde"]
 
 [dev-dependencies]
 proptest = "1.9"
-text-splitter = "0.32"
+text-splitter = "0.33"
 textprep = "=0.1.6"
