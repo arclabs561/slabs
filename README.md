@@ -63,6 +63,13 @@ the document, then span pooling reduces token-level embeddings over each
 
 ```rust
 use slabs::{Slab, SpanPooler};
+# fn make_spans(document: &str) -> Vec<Slab> {
+#     slabs::slabs_from_byte_ranges(document, &[0..24, 25..41]).unwrap()
+# }
+# fn embed_full_document_tokens(_: &str) -> Vec<Vec<f32>> { vec![vec![1.0; 384]; 2] }
+# fn tokenizer_offsets(_: &str) -> Vec<(usize, usize)> { vec![(0, 24), (25, 41)] }
+# fn main() -> Result<(), slabs::PoolingError> {
+# let document = "Ada designed the engine. She wrote notes.";
 
 let spans: Vec<Slab> = make_spans(&document);
 let token_embeddings: Vec<Vec<f32>> = embed_full_document_tokens(&document);
@@ -71,6 +78,9 @@ let token_offsets: Vec<(usize, usize)> = tokenizer_offsets(&document);
 let pooler = SpanPooler::new(384);
 let span_embeddings =
     pooler.try_pool_with_offsets(&token_embeddings, &token_offsets, &spans)?;
+# assert_eq!(span_embeddings.len(), 2);
+# Ok(())
+# }
 ```
 
 Use `try_pool_with_offsets` for byte offsets and `try_pool_with_char_offsets`
