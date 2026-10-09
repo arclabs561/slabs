@@ -9,6 +9,7 @@ repository = "https://github.com/arclabs561/slabs"
 keywords = ["chunking", "rag", "embedding", "retrieval", "spans"]
 categories = ["text-processing"]
 rust-version = "1.81"
+include = ["/src", "/examples", "/README.md", "/CHANGELOG.md", "/LICENSE*"]
 
 [workspace]
 
