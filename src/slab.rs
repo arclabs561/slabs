@@ -227,8 +227,11 @@ fn char_to_byte_offset(source: &str, char_offset: usize) -> usize {
 /// per-slab computation when there are many slabs.
 ///
 /// Each slab must use byte offsets into the exact `text` argument, and each
-/// offset must be a UTF-8 character boundary. Use [`Slab::from_byte_range`] or
-/// [`slabs_from_byte_ranges`] when you need validation.
+/// offset must be a UTF-8 character boundary. A slab whose offsets are past the
+/// end of `text` or inside a character keeps `char_start`/`char_end` as `None`
+/// instead of panicking or receiving a wrong value. Use
+/// [`Slab::from_byte_range`] or [`slabs_from_byte_ranges`] when invalid offsets
+/// must be an error.
 ///
 /// # Example
 ///
@@ -262,8 +265,16 @@ pub fn compute_char_offsets(text: &str, slabs: &mut [Slab]) {
     byte_to_char[text.len()] = text.chars().count();
 
     for slab in slabs.iter_mut() {
-        slab.char_start = Some(byte_to_char[slab.start]);
-        slab.char_end = Some(byte_to_char[slab.end]);
+        let valid = slab.start <= slab.end
+            && text.is_char_boundary(slab.start)
+            && text.is_char_boundary(slab.end);
+        if valid {
+            slab.char_start = Some(byte_to_char[slab.start]);
+            slab.char_end = Some(byte_to_char[slab.end]);
+        } else {
+            slab.char_start = None;
+            slab.char_end = None;
+        }
     }
 }
 

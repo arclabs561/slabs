@@ -4,6 +4,19 @@ All notable changes to this project are documented here. Format based on [Keep a
 
 ## [Unreleased]
 
+### Fixed
+
+- `compute_char_offsets` (and so `SlabSource::slabs` / `Chunker::chunk`) no
+  longer panics on offsets past the end of the text, and leaves character
+  offsets unset instead of wrong for offsets inside a character.
+- Late chunking citation authors (Günther, Mohr, Williams, Wang, Xiao) and the
+  pooling formula's exclusive end.
+
+### Deprecated
+
+- `SpanPooler::pool`, the positional approximation; use
+  `try_pool_with_offsets` or `try_pool_with_char_offsets`.
+
 ## [0.4.0] - 2026-09-12
 
 ### Added

@@ -13,6 +13,8 @@
 //!
 //! Vectors are chosen so the mean and the L2 norm have closed forms.
 
+#![allow(deprecated)] // `SpanPooler::pool` stays tested until it is removed.
+
 use slabs::{Slab, SpanPooler};
 
 const SQRT_HALF: f32 = std::f32::consts::FRAC_1_SQRT_2; // 1 / sqrt(2)

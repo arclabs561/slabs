@@ -37,7 +37,7 @@
 //! and span boundaries [(s1, e1), (s2, e2), ...]:
 //!
 //! ```text
-//! span_embedding_i = (1 / |ei - si|) * Σ_{t=si}^{ei} ht
+//! span_embedding_i = (1 / (ei - si)) * Σ_{t=si}^{ei-1} ht
 //! ```
 //!
 //! The returned vector is the L2-normalized mean vector.
@@ -58,8 +58,8 @@
 //!
 //! ## References
 //!
-//! Günther, Billerbeck, et al. (2024). "Late Chunking: Contextual Chunk
-//! Embeddings Using Long-Context Embedding Models." arXiv:2409.04701.
+//! Günther, Mohr, Williams, Wang & Xiao (2024). "Late Chunking: Contextual
+//! Chunk Embeddings Using Long-Context Embedding Models." arXiv:2409.04701.
 
 use std::ops::Range;
 
@@ -186,7 +186,11 @@ impl SpanPooler {
     /// This method linearly maps byte offsets to token indices. Prefer
     /// [`pool_with_offsets`](SpanPooler::pool_with_offsets) or
     /// [`pool_with_char_offsets`](SpanPooler::pool_with_char_offsets) when a
-    /// tokenizer reports exact offsets.
+    /// tokenizer reports exact offsets. A span that maps to no token falls back
+    /// to the whole-document mean.
+    #[deprecated(
+        note = "positional approximation that silently falls back to the document mean; use try_pool_with_offsets or try_pool_with_char_offsets"
+    )]
     pub fn pool(
         &self,
         token_embeddings: &[Vec<f32>],
@@ -517,6 +521,7 @@ impl SpanPooler {
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // `pool` stays tested until it is removed.
 mod tests {
     use super::*;
 

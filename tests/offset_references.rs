@@ -76,3 +76,27 @@ fn checked_construction_distinguishes_valid_empty_from_out_of_source_ranges() {
         Err(Error::InvalidCharSpan { .. })
     ));
 }
+
+/// A boundary source that returns offsets the `SlabSource` contract forbids.
+struct BadOffsets;
+
+impl slabs::SlabSource for BadOffsets {
+    fn slab_bytes(&self, _text: &str) -> Vec<Slab> {
+        vec![
+            Slab::new("", 1, 3, 0),      // 1 is inside the 2-byte 'é'
+            Slab::new("", 0, 10_000, 1), // past the end of the source
+            Slab::new("é", 0, 2, 2),     // valid
+        ]
+    }
+}
+
+#[test]
+fn char_offsets_for_mid_codepoint_or_out_of_source_offsets_are_unset_not_a_panic() {
+    use slabs::SlabSource;
+
+    let slabs = BadOffsets.slabs("éclair");
+
+    assert_eq!(slabs[0].char_span(), None, "mid-codepoint start");
+    assert_eq!(slabs[1].char_span(), None, "end past the source");
+    assert_eq!(slabs[2].char_span(), Some(0..1));
+}
