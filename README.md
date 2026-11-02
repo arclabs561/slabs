@@ -6,10 +6,6 @@
 
 Retrieval spans and offset-aware token pooling.
 
-`slabs` provides `Slab`, a text span with byte and character offsets, plus
-utilities for pooling token embeddings over those spans. Use it between
-document extraction, annotation, embedding, and indexing.
-
 - `Slab`: text plus byte and character offsets in the source string.
 - `SpanPooler`: pool full-document token embeddings into span vectors. This is
   the pooling step used by late chunking; boundaries come from upstream code.
@@ -45,8 +41,8 @@ assert_eq!(&document[slab.span()], slab.text);
 assert_eq!(slab.char_span(), Some(0..24));
 ```
 
-Boundary sources can be manual spans, `text-splitter`, `deformat` segments,
-or `anno` RAG chunks.
+Boundaries can be manual ranges or the byte ranges reported by any segmenter,
+such as `text-splitter`.
 
 Offsets are relative to the exact string used to construct the slab. If text is
 normalized, extracted, or otherwise transformed before slab construction, the
@@ -85,8 +81,9 @@ let span_embeddings =
 
 Use `try_pool_with_offsets` for byte offsets and `try_pool_with_char_offsets`
 for character offsets. These checked methods return `PoolingError` for invalid
-embedding, offset, or span contracts. `pool_with_offsets` and
-`pool_with_char_offsets` retain their legacy fallback behavior.
+embedding, offset, or span contracts. On invalid input, `pool_with_offsets`
+and `pool_with_char_offsets` fall back to permissive pooling instead of
+returning an error.
 
 These methods include each whole token whose offset overlaps the slab; they do
 not weight partial boundary overlap. Use `pool` only as a positional
@@ -112,6 +109,17 @@ See [examples/README.md](examples/README.md) for the runnable example map.
 
 ```sh
 cargo run --example span_pooling
+```
+
+The example pools hand-written 4-dimensional token vectors, standing in for
+full-document embeddings, over three `text-splitter` spans. Output excerpt:
+
+```text
+span 0 [0..30]: "Einstein developed relativity."
+  pooled [einstein, pronoun, theory, physics]: [0.987, 0.000, 0.073, 0.146]
+
+span 1 [31..48]: "He became famous."
+  pooled [einstein, pronoun, theory, physics]: [0.844, 0.533, 0.000, 0.067]
 ```
 
 ## Migrating from 0.2
