@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format based on [Keep a
 
 ## [Unreleased]
 
+### Changed
+
+- The legacy fallback of `pool_with_offsets` and `pool_with_char_offsets`
+  (taken when any slab is invalid, for example unsorted) now skips
+  zero-width tokens, as the checked path does. A slab's vector no longer
+  depends on whether a neighbouring slab made the call fall back.
+
 ### Fixed
 
 - `compute_char_offsets` (and so `SlabSource::slabs` / `Chunker::chunk`) no

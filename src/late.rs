@@ -448,6 +448,10 @@ impl SpanPooler {
                 let mut count = 0usize;
                 let mut overlaps = false;
                 for (token, offset) in token_offsets.iter().enumerate() {
+                    // Zero-width (special) tokens never count, as in try_pool_exact.
+                    if offset.0 == offset.1 {
+                        continue;
+                    }
                     if offset.0 < span.end && offset.1 > span.start {
                         overlaps = true;
                         if let Some(embedding) = token_embeddings.get(token) {
@@ -640,6 +644,27 @@ mod tests {
         let pooled = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &chunks);
 
         assert_eq!(pooled[0], vec![1.0, 0.0]);
+    }
+
+    #[test]
+    fn fallback_pooling_skips_zero_width_tokens_like_checked_pooling() {
+        // Unsorted slabs take the legacy fallback; a slab's vector must not
+        // depend on that, so the zero-width token at 4 counts in neither path.
+        let pooler = SpanPooler::new(2);
+        let token_embeddings = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![1.0, 0.0]];
+        let token_offsets = vec![(0, 4), (4, 4), (4, 8)];
+        let whole = Slab::new("", 0, 8, 0);
+        let tail = Slab::new("", 4, 8, 1);
+
+        let sorted = pooler.pool_with_offsets(
+            &token_embeddings,
+            &token_offsets,
+            &[whole.clone(), tail.clone()],
+        );
+        let unsorted = pooler.pool_with_offsets(&token_embeddings, &token_offsets, &[tail, whole]);
+
+        assert_eq!(sorted[0], vec![1.0, 0.0]);
+        assert_eq!(unsorted[1], sorted[0]);
     }
 
     #[test]
