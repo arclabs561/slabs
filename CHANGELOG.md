@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format based on [Keep a
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-04
+
 ### Changed
 
 - The legacy fallback of `pool_with_offsets` and `pool_with_char_offsets`

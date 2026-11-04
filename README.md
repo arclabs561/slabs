@@ -16,7 +16,7 @@ Dual-licensed under MIT or Apache-2.0.
 
 ```toml
 [dependencies]
-slabs = "0.4"
+slabs = "0.5"
 ```
 
 Features:
